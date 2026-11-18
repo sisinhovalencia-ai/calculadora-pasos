@@ -1,0 +1,4 @@
+# Para desarrollar y probar (incluye lo de requirements.txt)
+-r requirements.txt
+pytest>=7
+pytest-asyncio>=0.23
