@@ -42,7 +42,8 @@ español primero, enfoque tipo Baldor, y explicar **el porqué** de cada paso.
 - [ ] Polinomios con coeficientes decimales mostrados en decimales (hoy salen como fracciones)
 
 ### Publicación en internet
-- [x] Preparada para Render: `render.yaml`, dirección `/salud`, `main.py` que escucha en 0.0.0.0 cuando existe la variable RENDER, `.gitignore`
+- [x] Preparada para Render: `render.yaml`, arranque estándar con uvicorn (`asgi.py`, con mensajes de diagnóstico por etapa), dirección `/salud`, `.gitignore`
+- [x] Primer intento de despliegue: «Timed out» en el health check; se cambió a `uvicorn asgi:app` y se agregó diagnóstico para ver dónde se queda
 - [x] Resolución en un hilo con tiempo máximo (20 s) y exponentes limitados en el álgebra, para que un ejercicio pesado no congele a los demás
 - [x] El servidor «calienta» SymPy al arrancar: la primera persona no espera de más
 - [ ] Subirla a GitHub y publicarla en Render (la guía está en el README)

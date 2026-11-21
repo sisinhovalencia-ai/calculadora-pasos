@@ -208,8 +208,9 @@ pruebas comparan miles de expresiones al azar contra SymPy y comprueban que cada
 ## Publicarla en internet (Render)
 
 Render publica la aplicación **desde un repositorio de GitHub**, así que primero hay que subir el proyecto ahí (una sola vez).
-Todo lo necesario ya está en el proyecto: `render.yaml` (la configuración), `.gitignore` (qué no se sube), `.python-version`,
-`requirements.txt` y la dirección `/salud` que Render consulta para saber que la app está viva.
+Todo lo necesario ya está en el proyecto: `render.yaml` (la configuración), `asgi.py` (el arranque para servidores),
+`.gitignore` (qué no se sube), `.python-version`, `requirements.txt` y la dirección `/salud` que Render consulta para saber
+que la app está viva. En tu computador sigues usando `python main.py`; en Render se usa `python -m uvicorn asgi:app`.
 
 **1. Subirla a GitHub** (una sola vez; necesitas tener Git instalado: https://git-scm.com). Abre la terminal de VS Code
 dentro de la carpeta del proyecto:
@@ -236,7 +237,20 @@ repositorio `calculadora-pasos` y confirma. Render lee `render.yaml`, instala la
 tarda unos minutos). Al terminar te da una dirección como `https://calculadora-pasos.onrender.com`: ábrela en tu celular.
 
 Si prefieres hacerlo a mano (New + → Web Service): *Runtime* Python, *Build Command* `pip install -r requirements.txt`,
-*Start Command* `python main.py`, *Health Check Path* `/salud`, plan **Free** y la variable de entorno `PYTHON_VERSION` = `3.12.7`.
+*Start Command* `python -m uvicorn asgi:app --host 0.0.0.0 --port $PORT --log-level info`, *Health Check Path* `/salud`, plan **Free**
+y las variables de entorno `PYTHON_VERSION` = `3.12.7` y `PYTHONUNBUFFERED` = `1`.
+
+**Si el despliegue falla** («Deploy failed» o «Timed out»): abre **Logs** y busca las líneas que empiezan con `[asgi +…]`.
+Cada una marca una etapa del arranque, y la **última** que aparece dice dónde se quedó:
+
+| Última línea que ves | Significa |
+|---|---|
+| ninguna `[asgi …]` | Render no llegó a ejecutar `asgi.py`: revisa el *Start Command* en **Settings** |
+| `Python 3.12.x · PORT=10000 · RENDER=true` | Arrancó Python pero se quedó cargando FastAPI |
+| `NiceGUI cargado` | Se quedó cargando el motor de la calculadora |
+| `Listo: la aplicación está montada…` y luego `Uvicorn running on http://0.0.0.0:10000` | Todo bien: ya debería responder `/salud` |
+
+Copia esas líneas (y cualquier `Traceback`) y con eso se encuentra el problema.
 
 **3. Actualizarla después.** Cada vez que cambies algo y quieras que se vea en internet:
 
