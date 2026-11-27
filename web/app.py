@@ -27,6 +27,11 @@ from starlette.responses import PlainTextResponse
 
 from motor import ErrorMotor, Solucion, resolver_columnas
 from motor.algebra import separar_comando, tiene_comando
+from motor.formulario import TEMAS
+from motor.formulario import calcular as calcular_formula
+from motor.formulario import despejar as despejar_formula
+from motor.formulario import formula as buscar_formula
+from motor.formulario import latex_formula
 from motor import resolver_ejercicio as resolver_auto   # (la de la página se llama igual: ver más abajo)
 
 from .estilos import CSS, HEAD_HTML
@@ -50,6 +55,10 @@ EJEMPLOS_FACTORIZAR = ["factorizar x² − 9", "factorizar x² + 5x + 6", "facto
 EJEMPLOS_FRACCIONES = ["(x² − 9)/(x − 3)", "1/(x − 1) + 1/(x + 1)", "(x² − 4)/(x + 1) · (x + 1)/(x − 2)"]
 EJEMPLOS_RAICES = ["√12", "√50 + √8", "1/√2", "3/(2 + √5)", "8^(1/3)"]
 COMANDOS = ("factorizar", "desarrollar", "simplificar")
+# Nivel de la calculadora: qué teclas y ejemplos se ven. «Todo» muestra todo (es lo normal).
+NIVELES = {"Todo": 9, "Básica": 1, "Ecuaciones": 2, "Álgebra": 3}
+NIVEL_DE_TECLA = {"x": 2, "=": 2, "<": 2, ">": 2, "≤": 2, "≥": 2, "despejar": 2,
+                  "²": 3, "³": 3, "simplificar": 3, "factorizar": 3, "desarrollar": 3}
 TIEMPO_MAXIMO = 20        # segundos que se espera una solución antes de decir «tarda demasiado»
 EJEMPLOS_COLUMNAS = ["4567 + 289", "905 − 267", "123 × 45", "7845 ÷ 12"]
 
@@ -172,12 +181,117 @@ def _final_html(sol: Solucion) -> str:
     )
 
 
-def _fila_ejemplos(etiqueta: str, ejemplos: list[str], al_pulsar) -> None:
-    """Una fila de botones de ejemplo con su rótulo («Prueba con:», «Ecuaciones:»...)."""
-    with ui.element("div").classes("ejemplos"):
+def _fila_ejemplos(etiqueta: str, ejemplos: list[str], al_pulsar):
+    """Una fila de botones de ejemplo con su rótulo («Prueba con:», «Ecuaciones:»...). Devuelve la fila."""
+    with ui.element("div").classes("ejemplos") as fila:
         ui.label(etiqueta)
         for ej in ejemplos:
             ui.button(ej, on_click=lambda t=ej: al_pulsar(t), color=None).classes("ejemplo").props("flat no-caps")
+    return fila
+
+
+def _solucion_en_pantalla(sol: Solucion) -> None:
+    """Dibuja un ejercicio resuelto completo (enunciado, todos los pasos y resultado) en el contenedor actual."""
+    _html(mathml(sol.latex_inicial, sol.expresion_inicial)).classes("ejercicio")
+    with ui.element("ol").classes("pasos"):
+        for p in sol.pasos:
+            _html(_paso_html(p), tag="li").classes("paso")
+    _html(_final_html(sol)).classes("final").props('tabindex="-1"')
+
+
+def _formulario() -> None:
+    """La pestaña «Fórmulas»: elegir tema y fórmula, ver qué significa cada letra, despejar y calcular con números."""
+    est: dict = {"tema": TEMAS[0].id, "formula": None, "objetivo": None, "valores": {}}
+    cont: dict = {"res": None}
+
+    def poner_tema(id_tema: str) -> None:
+        est.update(tema=id_tema, formula=None, objetivo=None, valores={})
+        dibujar.refresh()
+
+    def poner_formula(id_formula: str) -> None:
+        est.update(formula=id_formula, objetivo=buscar_formula(id_formula).variables[0].letra, valores={})
+        dibujar.refresh()
+
+    def poner_objetivo(letra: str) -> None:
+        est["objetivo"] = letra               # los números que ya escribió se conservan
+        dibujar.refresh()
+
+    async def resolver(modo: str) -> None:
+        res = cont["res"]
+        if res is None or est["formula"] is None:
+            return
+        res.clear()
+        id_f, obj = est["formula"], est["objetivo"]
+        valores = dict(est["valores"])
+        try:
+            funcion = (lambda: despejar_formula(id_f, obj)) if modo == "despejar" else (lambda: calcular_formula(id_f, obj, valores))
+            sol = await asyncio.wait_for(asyncio.to_thread(funcion), timeout=TIEMPO_MAXIMO)
+        except asyncio.TimeoutError:
+            with res:
+                _html("<strong>No se pudo resolver</strong><p>Esto tarda demasiado en resolverse. Prueba de nuevo.</p>"
+                      ).classes("error").props('role="alert"')
+            return
+        except ErrorMotor as e:
+            with res:
+                _html(f"<strong>No se pudo resolver</strong><p>{escape(str(e))}</p>").classes("error").props('role="alert"')
+            return
+        with res:
+            _solucion_en_pantalla(sol)
+        _js("setTimeout(() => { const z = document.querySelector('.zona-formula'); if (z) z.scrollIntoView({"
+            f"behavior: {_MOVIMIENTO}, block: 'start'}}); }}, 80);")
+
+    @ui.refreshable
+    def dibujar() -> None:
+        tema = next(t for t in TEMAS if t.id == est["tema"])
+        with ui.element("div").classes("temas"):
+            for t in TEMAS:
+                (ui.button(f"{t.icono} {t.nombre}", on_click=lambda i=t.id: poner_tema(i), color=None)
+                 .classes("tema" + (" activo" if t.id == est["tema"] else "")).props("flat no-caps").mark(f"tema-{t.id}"))
+        with ui.element("div").classes("lista-formulas"):
+            for f in tema.formulas:
+                with (ui.button(on_click=lambda i=f.id: poner_formula(i), color=None)
+                      .classes("tarjeta-formula" + (" activa" if f.id == est["formula"] else ""))
+                      .props("flat no-caps").mark(f"formula-{f.id}")):
+                    ui.label(f.nombre).classes("tarjeta-nombre")
+                    ui.label(f.expresion).classes("tarjeta-expr")
+        if est["formula"] is None:
+            _html('<p class="formulas-intro">Elige una fórmula: verás qué significa cada letra, podrás despejar la que '
+                  'necesites y calcular con tus propios números.</p>')
+            cont["res"] = None
+            return
+        f = buscar_formula(est["formula"])
+        obj = est["objetivo"]
+        with ui.element("section").classes("detalle-formula"):
+            _html(f"<h2>{escape(f.nombre)}</h2>")
+            _html(mathml(latex_formula(f.id), f.expresion)).classes("formula-grande")
+            filas = "".join(
+                f'<tr><td class="letra-v">{escape(v.letra)}</td><td>{escape(v.nombre)}</td>'
+                f'<td class="unidad-v">{escape(v.unidad)}</td></tr>' for v in f.variables)
+            _html(f'<table class="variables" aria-label="Qué significa cada letra">{filas}</table>')
+            if f.nota:
+                _html(f'<p class="nota-formula">{escape(f.nota)}</p>')
+            _html('<p class="pregunta">¿Qué letra quieres hallar?</p>')
+            with ui.element("div").classes("letras"):
+                for v in f.variables:
+                    (ui.button(v.letra, on_click=lambda l=v.letra: poner_objetivo(l), color=None)
+                     .classes("letra" + (" activa" if v.letra == obj else "")).props(f'flat no-caps aria-label="Hallar {escape(v.nombre)}"')
+                     .mark(f"objetivo-{v.letra}"))
+            _html('<p class="pregunta">¿Conoces los valores de las otras letras? Escríbelos y calcula '
+                  '(si no, solo despeja).</p>')
+            with ui.element("div").classes("datos"):
+                for v in [w for w in f.variables if w.letra != obj]:
+                    campo = ui.input(label=f"{v.letra} — {v.nombre} ({v.unidad})", value=est["valores"].get(v.letra, ""))
+                    campo.props('outlined dense autocomplete="off" inputmode="text" maxlength="24"').mark(f"valor-{v.letra}")
+                    campo.on_value_change(lambda e, l=v.letra: est["valores"].__setitem__(l, e.value or ""))
+                    campo.on("keydown.enter", lambda: resolver("calcular"))
+            with ui.element("div").classes("acciones-formula"):
+                (ui.button(f"Despejar {obj}", on_click=lambda: resolver("despejar"), color=None)
+                 .classes("boton-resolver").props("unelevated no-caps").mark("btn-despejar"))
+                (ui.button(f"Calcular {obj}", on_click=lambda: resolver("calcular"), color=None)
+                 .classes("boton-resolver boton-secundario").props("unelevated no-caps").mark("btn-calcular"))
+        cont["res"] = ui.element("div").classes("zona-formula").props('aria-live="polite"')
+
+    dibujar()
 
 
 async def inicio(q: str = "") -> None:
@@ -320,51 +434,88 @@ async def inicio(q: str = "") -> None:
             entrada.value = actual + tecla
 
     # ----- pantalla -------------------------------------------------------
+    teclas_nivel: list = []     # (tecla, nivel mínimo): se ocultan según el nivel elegido
+    filas_nivel: list = []      # (fila de ejemplos, nivel mínimo)
+
+    botones_nivel: dict = {}
+
+    def elegir_nivel(nombre: str) -> None:
+        tope = NIVELES[nombre]
+        for elemento, nivel in teclas_nivel + filas_nivel:
+            elemento.set_visibility(nivel <= tope)
+        for n, boton in botones_nivel.items():
+            if n == nombre:
+                boton.classes(add="activo")
+            else:
+                boton.classes(remove="activo")
+
     with ui.element("main").classes("hoja"):
         _html(
             f'<h1 class="titulo">{TITULO}</h1>'
             '<p class="subtitulo">Escribe una operación y mira cómo se resuelve, un paso a la vez.</p>'
         )
 
-        entrada = ui.input(label="Tu ejercicio", placeholder="Ej.: 2 + 3 × (4 − 1)^2").classes("entrada")
-        entrada.props(f'borderless stack-label autocomplete="off" inputmode="text" maxlength="{MAX_CARACTERES}"')
-        entrada.on("keydown.enter", resolver_ejercicio)
+        with ui.tabs().classes("pestanas").props("align=left no-caps") as pestanas:
+            pestana_calculadora = ui.tab("Calculadora").mark("pestana-calculadora")
+            pestana_formulas = ui.tab("Fórmulas").mark("pestana-formulas")
+        with ui.tab_panels(pestanas, value=pestana_calculadora).classes("paneles"):
+            with ui.tab_panel(pestana_calculadora):
 
-        with ui.element("div").classes("fila-accion"):
-            ui.button("Resolver", on_click=resolver_ejercicio, color=None).classes("boton-resolver").props("unelevated no-caps")
-            ui.switch("Un paso a la vez", on_change=cambiar_modo).mark("un-paso")
-            modo_columnas = ui.switch("En columnas (a mano)", on_change=cambiar_columnas)
-            modo_columnas.mark("modo-columnas")
+                entrada = ui.input(label="Tu ejercicio", placeholder="Ej.: 2 + 3 × (4 − 1)^2").classes("entrada")
+                entrada.props(f'borderless stack-label autocomplete="off" inputmode="text" maxlength="{MAX_CARACTERES}"')
+                entrada.on("keydown.enter", resolver_ejercicio)
 
-        with ui.element("div").classes("teclado"):
-            for texto, es_op in TECLAS:
-                boton = ui.button(texto, on_click=lambda t=texto: pulsar(t), color=None).props("flat no-caps")
-                boton.classes("tecla op" if es_op else "tecla").mark(f"tecla-{texto}")
-                if texto in ETIQUETAS_TECLAS:
-                    boton.props(f'aria-label="{ETIQUETAS_TECLAS[texto]}"')
-            for comando in ("simplificar",):
-                b = ui.button(comando, on_click=lambda c=comando: pulsar(c), color=None).props("flat no-caps")
-                b.classes("tecla tecla-ancha op").mark(f"tecla-{comando}")
-            ancho = ui.button("espacio", on_click=lambda: pulsar("espacio"), color=None).props("flat no-caps")
-            ancho.classes("tecla tecla-ancha").mark("tecla-espacio")
-            despejar = ui.button("despejar", on_click=lambda: pulsar("despejar"), color=None).props("flat no-caps")
-            despejar.classes("tecla tecla-ancha op").mark("tecla-despejar")
-            for comando in ("factorizar", "desarrollar"):
-                b = ui.button(comando, on_click=lambda c=comando: pulsar(c), color=None).props("flat no-caps")
-                b.classes("tecla tecla-ancha op").mark(f"tecla-{comando}")
+                with ui.element("div").classes("fila-accion"):
+                    ui.button("Resolver", on_click=resolver_ejercicio, color=None).classes("boton-resolver").props("unelevated no-caps")
+                    ui.switch("Un paso a la vez", on_change=cambiar_modo).mark("un-paso")
+                    modo_columnas = ui.switch("En columnas (a mano)", on_change=cambiar_columnas)
+                    modo_columnas.mark("modo-columnas")
 
-        _fila_ejemplos("Prueba con:", EJEMPLOS, usar_ejemplo)
-        _fila_ejemplos("Ecuaciones:", EJEMPLOS_ECUACIONES, usar_ejemplo)
-        _fila_ejemplos("Desigualdades:", EJEMPLOS_DESIGUALDADES, usar_ejemplo)
-        _fila_ejemplos("Fórmulas:", EJEMPLOS_FORMULAS, usar_ejemplo)
-        _fila_ejemplos("Álgebra:", EJEMPLOS_ALGEBRA, usar_ejemplo)
-        _fila_ejemplos("Factorizar:", EJEMPLOS_FACTORIZAR, usar_ejemplo)
-        _fila_ejemplos("Fracciones:", EJEMPLOS_FRACCIONES, usar_ejemplo)
-        _fila_ejemplos("Raíces:", EJEMPLOS_RAICES, usar_ejemplo)
-        _fila_ejemplos("A mano:", EJEMPLOS_COLUMNAS, lambda t: usar_ejemplo(t, columnas=True))
+                with ui.element("div").classes("fila-nivel"):
+                    ui.label("Nivel:")
+                    with ui.element("div").classes("niveles"):
+                        for nombre in NIVELES:
+                            botones_nivel[nombre] = (
+                                ui.button(nombre, on_click=lambda n=nombre: elegir_nivel(n), color=None)
+                                .classes("nivel" + (" activo" if nombre == "Todo" else "")).props("flat no-caps")
+                                .mark(f"nivel-{nombre}"))
 
-        # aria-live: el lector de pantalla anuncia el resultado cuando aparece
-        zona = ui.element("div").classes("zona").props('aria-live="polite"')
+                with ui.element("div").classes("teclado"):
+                    for texto, es_op in TECLAS:
+                        boton = ui.button(texto, on_click=lambda t=texto: pulsar(t), color=None).props("flat no-caps")
+                        boton.classes("tecla op" if es_op else "tecla").mark(f"tecla-{texto}")
+                        teclas_nivel.append((boton, NIVEL_DE_TECLA.get(texto, 1)))
+                        if texto in ETIQUETAS_TECLAS:
+                            boton.props(f'aria-label="{ETIQUETAS_TECLAS[texto]}"')
+                    for comando in ("simplificar",):
+                        b = ui.button(comando, on_click=lambda c=comando: pulsar(c), color=None).props("flat no-caps")
+                        b.classes("tecla tecla-ancha op").mark(f"tecla-{comando}")
+                        teclas_nivel.append((b, NIVEL_DE_TECLA[comando]))
+                    ancho = ui.button("espacio", on_click=lambda: pulsar("espacio"), color=None).props("flat no-caps")
+                    ancho.classes("tecla tecla-ancha").mark("tecla-espacio")
+                    teclas_nivel.append((ancho, 1))
+                    despejar = ui.button("despejar", on_click=lambda: pulsar("despejar"), color=None).props("flat no-caps")
+                    despejar.classes("tecla tecla-ancha op").mark("tecla-despejar")
+                    teclas_nivel.append((despejar, 2))
+                    for comando in ("factorizar", "desarrollar"):
+                        b = ui.button(comando, on_click=lambda c=comando: pulsar(c), color=None).props("flat no-caps")
+                        b.classes("tecla tecla-ancha op").mark(f"tecla-{comando}")
+                        teclas_nivel.append((b, NIVEL_DE_TECLA[comando]))
+
+                filas_nivel.append((_fila_ejemplos("Prueba con:", EJEMPLOS, usar_ejemplo), 1))
+                filas_nivel.append((_fila_ejemplos("Ecuaciones:", EJEMPLOS_ECUACIONES, usar_ejemplo), 2))
+                filas_nivel.append((_fila_ejemplos("Desigualdades:", EJEMPLOS_DESIGUALDADES, usar_ejemplo), 2))
+                filas_nivel.append((_fila_ejemplos("Fórmulas:", EJEMPLOS_FORMULAS, usar_ejemplo), 2))
+                filas_nivel.append((_fila_ejemplos("Álgebra:", EJEMPLOS_ALGEBRA, usar_ejemplo), 3))
+                filas_nivel.append((_fila_ejemplos("Factorizar:", EJEMPLOS_FACTORIZAR, usar_ejemplo), 3))
+                filas_nivel.append((_fila_ejemplos("Fracciones:", EJEMPLOS_FRACCIONES, usar_ejemplo), 3))
+                filas_nivel.append((_fila_ejemplos("Raíces:", EJEMPLOS_RAICES, usar_ejemplo), 3))
+                filas_nivel.append((_fila_ejemplos("A mano:", EJEMPLOS_COLUMNAS, lambda t: usar_ejemplo(t, columnas=True)), 1))
+
+                # aria-live: el lector de pantalla anuncia el resultado cuando aparece
+                zona = ui.element("div").classes("zona").props('aria-live="polite"')
+            with ui.tab_panel(pestana_formulas):
+                _formulario()
 
     if q:
         entrada.value = q[:MAX_CARACTERES]

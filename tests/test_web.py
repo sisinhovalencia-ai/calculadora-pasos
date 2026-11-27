@@ -360,3 +360,118 @@ async def test_la_pagina_sigue_viva_despues_de_un_ejercicio_lento(user: User, mo
     monkeypatch.setattr(app_web, "resolver_auto", original)
     user.find("Resolver").click()
     await user.should_see("Resultado")
+
+
+# ---------------------------------------------------------------------------
+# Pestañas, niveles y el Formulario
+# ---------------------------------------------------------------------------
+
+async def test_hay_dos_pestanas(user: User):
+    await user.open("/")
+    await user.should_see(marker="pestana-calculadora")
+    await user.should_see(marker="pestana-formulas")
+
+
+async def test_el_nivel_basica_oculta_lo_de_algebra_y_todo_lo_vuelve_a_mostrar(user: User):
+    await user.open("/")
+    await user.should_see(marker="tecla-factorizar")
+    user.find(marker="nivel-Básica").click()
+    await user.should_not_see(marker="tecla-factorizar")
+    await user.should_not_see(marker="tecla-despejar")
+    await user.should_not_see(marker="tecla-x")
+    await user.should_see(marker="tecla-√")                       # lo básico se queda
+    await user.should_see("Prueba con:")
+    await user.should_not_see("Factorizar:")
+    user.find(marker="nivel-Ecuaciones").click()
+    await user.should_see(marker="tecla-despejar")
+    await user.should_see(marker="tecla-x")
+    await user.should_not_see(marker="tecla-factorizar")
+    await user.should_see("Ecuaciones:")
+    user.find(marker="nivel-Todo").click()
+    await user.should_see(marker="tecla-factorizar")
+    await user.should_see("Factorizar:")
+
+
+async def test_resolver_sigue_funcionando_con_nivel_basico(user: User):
+    await user.open("/")
+    user.find(marker="nivel-Básica").click()
+    user.find(ui.input).type("2 + 3 × 4").trigger("keydown.enter")
+    await user.should_see("Resultado")
+
+
+async def test_formulario_elegir_tema_y_formula(user: User):
+    await user.open("/")
+    user.find(marker="pestana-formulas").click()
+    await user.should_see("Movimiento")
+    await user.should_see("Elige una fórmula")
+    user.find(marker="tema-electricidad").click()
+    await user.should_see("Ley de Ohm")
+    user.find(marker="formula-ohm").click()
+    await user.should_see("¿Qué letra quieres hallar?")
+    await user.should_see("voltaje")                              # el significado de cada letra
+    await user.should_see(marker="valor-I")
+    await user.should_see(marker="valor-R")
+
+
+async def test_formulario_calcular_con_numeros(user: User):
+    await user.open("/")
+    user.find(marker="pestana-formulas").click()
+    user.find(marker="formula-velocidad").click()
+    await user.should_see(marker="valor-d")                       # la pantalla se redibuja al elegir la fórmula
+    user.find(marker="valor-d").type("100")
+    user.find(marker="valor-t").type("8")
+    user.find(marker="btn-calcular").click()
+    await user.should_see("Respuesta: v = 25/2 m/s = 12.5 m/s")
+    await user.should_see("ponemos los valores")
+
+
+async def test_formulario_cambiar_la_letra_a_hallar(user: User):
+    await user.open("/")
+    user.find(marker="pestana-formulas").click()
+    user.find(marker="formula-velocidad").click()
+    await user.should_see(marker="objetivo-t")
+    user.find(marker="objetivo-t").click()
+    await user.should_see(marker="valor-v")
+    await user.should_see(marker="valor-d")
+    user.find(marker="valor-v").type("4")
+    user.find(marker="valor-d").type("20")
+    user.find(marker="btn-calcular").click()
+    await user.should_see("Respuesta: t = 5 s")
+
+
+async def test_formulario_solo_despejar(user: User):
+    await user.open("/")
+    user.find(marker="pestana-formulas").click()
+    user.find(marker="tema-electricidad").click()
+    await user.should_see("Ley de Ohm")
+    user.find(marker="formula-ohm").click()
+    await user.should_see(marker="objetivo-I")
+    user.find(marker="objetivo-I").click()
+    await user.should_see(marker="valor-V")
+    user.find(marker="btn-despejar").click()
+    await user.should_see("dividimos ambos lados")
+    await user.should_see("Resultado")
+
+
+async def test_formulario_valor_que_no_es_numero(user: User):
+    await user.open("/")
+    user.find(marker="pestana-formulas").click()
+    user.find(marker="formula-velocidad").click()
+    await user.should_see(marker="valor-d")
+    user.find(marker="valor-d").type("veinte")
+    user.find(marker="valor-t").type("8")
+    user.find(marker="btn-calcular").click()
+    await user.should_see("debe ser un número")
+
+
+async def test_formulario_falta_un_valor_y_division_entre_cero(user: User):
+    await user.open("/")
+    user.find(marker="pestana-formulas").click()
+    user.find(marker="formula-velocidad").click()
+    await user.should_see(marker="valor-d")
+    user.find(marker="valor-d").type("20")
+    user.find(marker="btn-calcular").click()
+    await user.should_see("Falta el valor de t")
+    user.find(marker="valor-t").type("0")
+    user.find(marker="btn-calcular").click()
+    await user.should_see("No se puede dividir entre cero")

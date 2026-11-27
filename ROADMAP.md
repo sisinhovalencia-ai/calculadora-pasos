@@ -41,6 +41,16 @@ español primero, enfoque tipo Baldor, y explicar **el porqué** de cada paso.
 - [ ] Ecuaciones con fracciones algebraicas (`1/(x − 1) + 1/(x + 1) = 1`) y con radicales
 - [ ] Polinomios con coeficientes decimales mostrados en decimales (hoy salen como fracciones)
 
+### Interfaz y Formulario
+- [x] Dos pestañas: Calculadora (universal, el despachador sigue adivinando solo) y Fórmulas
+- [x] Selector de nivel (Todo / Básica / Ecuaciones / Álgebra) que solo cambia teclas y ejemplos visibles
+- [x] Formulario con 28 fórmulas en 6 temas (movimiento, fuerza y energía, electricidad, materia y calor, geometría, ingeniería industrial)
+- [x] Despejar cualquier letra con pasos y **calcular con números** (sustituir + aritmética), con unidades
+- [ ] Fórmulas con potencias o raíces (Ec = ½mv², A = πr², d = ½at²): necesitan la Etapa 4
+- [ ] Subíndices en las letras (v₀, m₁) para fórmulas de física como se escriben en el libro
+- [ ] Más fórmulas: cinemática avanzada, termodinámica, estadística básica, economía de la ingeniería (interés compuesto)
+- [ ] Búsqueda de fórmulas por nombre y «favoritas» del estudiante
+
 ### Publicación en internet
 - [x] Preparada para Render: `render.yaml`, arranque estándar con uvicorn (`asgi.py`, con mensajes de diagnóstico por etapa), dirección `/salud`, `.gitignore`
 - [x] Primer intento de despliegue: «Timed out» en el health check; se cambió a `uvicorn asgi:app` y se agregó diagnóstico para ver dónde se queda

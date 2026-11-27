@@ -229,4 +229,56 @@ details.porque p { margin: 6px 0 0; font-size: 1rem; line-height: 1.5; max-width
 
 /* ---------- Accesibilidad: sin animaciones si el usuario lo pide ---------- */
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* ---------- Pestañas y niveles ---------- */
+.pestanas { margin-top: 20px; border-bottom: 2px solid var(--linea); }
+.pestanas .q-tab { text-transform: none; color: var(--suave); min-height: 50px; padding: 0 22px 0 0; }
+.pestanas .q-tab__label { font-size: 1.15rem !important; font-weight: 700 !important; }
+.pestanas .q-tab--active { color: var(--tinta); }
+.pestanas .q-tab__indicator { background: var(--tinta); height: 3px; }
+.paneles, .paneles .q-panel, .paneles .q-tab-panel { background: transparent !important; color: inherit; }
+.paneles .q-tab-panel { padding: 0 !important; overflow: visible; }
+.paneles .q-panel { overflow: visible !important; }
+.fila-nivel { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 20px; color: var(--suave); }
+.niveles { display: flex; flex-wrap: wrap; gap: 8px; }
+.nivel { border: 1.5px solid var(--linea); border-radius: 999px; background: var(--tecla) !important; color: var(--grafito) !important;
+         min-height: 38px; padding: 0 16px; text-transform: none; }
+.nivel.activo { background: var(--tinta) !important; color: var(--papel) !important; border-color: var(--tinta); }
+
+/* ---------- El Formulario ---------- */
+.formulas-intro { color: var(--suave); max-width: 40rem; margin: 22px 0 0; }
+.temas { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+.tema { border: 1.5px solid var(--linea); border-radius: 999px; background: var(--tecla) !important; color: var(--grafito) !important;
+        padding: 4px 16px; min-height: 42px; text-transform: none; }
+.tema.activo { background: var(--tinta) !important; color: var(--papel) !important; border-color: var(--tinta); }
+.lista-formulas { display: grid !important; width: 100%; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; margin-top: 18px; }
+.tarjeta-formula { border: 1.5px solid var(--linea); border-radius: 12px; background: var(--tecla) !important; color: var(--grafito) !important;
+                   padding: 10px 14px; height: auto; text-transform: none; }
+.tarjeta-formula .q-btn__content { flex-direction: column; align-items: flex-start; text-align: left; gap: 2px; width: 100%; }
+.tarjeta-nombre { font-weight: 700; font-size: 1rem; line-height: 1.25; }
+.tarjeta-expr { color: var(--tinta); font-family: 'Cambria Math', 'STIX Two Math', 'Times New Roman', serif; font-size: 1.1rem; }
+.tarjeta-formula.activa { border-color: var(--tinta); box-shadow: inset 0 0 0 2px var(--tinta); }
+.detalle-formula { width: 100%; box-sizing: border-box; margin-top: 26px; padding: 20px 22px; border: 1.5px solid var(--linea); border-radius: 14px;
+                   background: color-mix(in srgb, var(--tecla) 75%, transparent); }
+.detalle-formula h2 { margin: 0 0 6px; font-size: 1.35rem; font-weight: 700; }
+.formula-grande { font-size: 1.7rem; color: var(--tinta); margin: 4px 0 14px; }
+table.variables { border-collapse: collapse; margin: 6px 0 4px; }
+table.variables td { padding: 4px 18px 4px 0; text-align: left; vertical-align: baseline; }
+table.variables .letra-v { font-weight: 700; color: var(--tinta); font-style: italic; font-size: 1.1rem; }
+table.variables .unidad-v { color: var(--suave); }
+.nota-formula { color: var(--suave); font-size: .95rem; margin: 6px 0 0; }
+.pregunta { margin: 20px 0 8px; font-weight: 700; }
+.letras { display: flex; flex-wrap: wrap; gap: 8px; }
+.letra { min-width: 50px; min-height: 46px; border: 1.5px solid var(--linea); border-radius: 10px; background: var(--tecla) !important;
+         color: var(--grafito) !important; font-size: 1.15rem; font-style: italic; font-weight: 700; text-transform: none; }
+.letra.activa { background: var(--tinta) !important; color: var(--papel) !important; border-color: var(--tinta); }
+.datos { display: grid !important; width: 100%; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px 16px; margin-top: 6px; max-width: 560px; }
+.acciones-formula { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+.boton-secundario { background: transparent !important; color: var(--tinta) !important; border: 2px solid var(--tinta); }
+.zona-formula { width: 100%; margin-top: 30px; }
+@media (max-width: 520px) {
+  .lista-formulas { grid-template-columns: 1fr; }
+  .detalle-formula { padding: 16px 14px; }
+  .formula-grande { font-size: 1.45rem; }
+}
 """

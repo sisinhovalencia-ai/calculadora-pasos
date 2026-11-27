@@ -58,6 +58,7 @@ motor/
   columnas.py    operaciones "a mano": suma, resta, multiplicación y división larga en columnas
   ecuaciones.py  ecuaciones y desigualdades lineales de una incógnita (2x + 3 = 11, 2x + 3 < 11), con comprobación
   formulas.py    despejar una letra de una fórmula (despejar t en v = d/t); usa SymPy
+  formulario.py  el Formulario: 28 fórmulas (física, geometría, ingeniería industrial) con unidades; despeja y calcula con números
   expr.py        ★ expresiones algebraicas para ESCRIBIR pasos (x² + 5x + 6, (x − 3)(x + 3), 2√3): dibuja como un libro
   algebra.py     comandos (factorizar, desarrollar, simplificar), libreta de pasos y verificación numérica
   polinomios.py  desarrollar y reducir: productos notables, distributiva, términos semejantes
@@ -167,6 +168,23 @@ se lee la igualdad al revés.
 - Atención: «de» (dos letras pegadas) se lee como la palabra "de" (multiplicar); para d·e escribe `d·e` o `d e`.
 - SymPy se instala con `requirements.txt` pero **solo se carga cuando despejas una fórmula**: arrancar la app y
   resolver aritmética o ecuaciones no lo usa.
+
+## La pantalla: dos pestañas y niveles
+
+**Calculadora** es la pantalla de siempre: escribes lo que quieras y ella decide sola qué hacer (no hay que cambiar de modo).
+El selector **Nivel** (Todo · Básica · Ecuaciones · Álgebra) solo cambia qué **teclas y ejemplos** se ven, para no abrumar a quien
+empieza: en «Básica» ves lo de aritmética; «Ecuaciones» agrega `x = < > ≤ ≥ despejar`; «Álgebra» agrega `² ³ factorizar
+desarrollar simplificar`. Escribir a mano cualquier cosa funciona en todos los niveles.
+
+**Fórmulas** es el Formulario: eliges un tema, una fórmula, la letra que quieres hallar, y puedes:
+- **Despejarla** con todos los pasos (sin números), o
+- **Calcularla** escribiendo los valores de las otras letras (acepta `12`, `4,5`, `1/2`, `−3`): se despeja, se sustituye y se resuelven las
+  operaciones con los pasos de siempre; la respuesta sale con su unidad (`R = 4 Ω`).
+
+Temas: Movimiento · Fuerza, trabajo y energía · Electricidad · Materia y calor · Geometría · Ingeniería industrial y finanzas
+(28 fórmulas, 93 despejes posibles). Cada letra dice qué significa y en qué unidad va. Por ahora todas son de **primer grado** en cada
+letra (así se puede despejar cualquiera); las que llevan potencias o raíces (energía cinética, área del círculo) llegan con la Etapa 4.
+Para π se usa 3,1416 y se avisa. Para agregar una fórmula nueva basta una línea en `motor/formulario.py`.
 
 ## Álgebra (Etapa 3, tipo Baldor)
 

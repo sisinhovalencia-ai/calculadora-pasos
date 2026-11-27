@@ -1,4 +1,0 @@
-# Librerías que necesita la aplicación para funcionar
-nicegui>=3.0,<4
-latex2mathml>=3.77
-sympy>=1.12          # fórmulas y álgebra: polinomios, factorización, fracciones, radicales (se carga cuando se usa)
