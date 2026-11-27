@@ -23,6 +23,7 @@ de mostrarlo. SymPy solo se carga cuando se despeja una fórmula (no al arrancar
 """
 
 import re
+from dataclasses import replace
 from fractions import Fraction
 
 from .arbol import BinOp, Cociente, Frac, Mixto, Neg, Nodo, Num, Paren, Porc, Raiz, Var, con_hijos, hijos, normalizar
@@ -89,7 +90,7 @@ def _a_sympy(n: Nodo, S: dict):
     if isinstance(n, Raiz):
         x = _a_sympy(n.hijo, S)
         if x.free_symbols:
-            raise ErrorMatematico(_NO_SOPORTADO)
+            return sp.Pow(x, sp.Rational(1, n.indice)) if n.indice % 2 == 0 else sp.real_root(x, n.indice)
         f = _calcular_raiz(n.indice, Fraction(int(x.p), int(x.q)))
         return sp.Rational(f.numerator, f.denominator)
     if isinstance(n, Cociente):
@@ -123,6 +124,18 @@ def _a_cocientes(n: Nodo) -> Nodo:
     if isinstance(nuevo, BinOp) and nuevo.op == "/" and _incognitas(nuevo, set()):
         return Cociente(nuevo.izq, nuevo.der)
     return nuevo
+
+
+def _desenvolver(n: Nodo) -> Nodo:
+    while isinstance(n, Paren):
+        n = n.hijo
+    return n
+
+
+def _tiene_raiz_de(n: Nodo, objetivo: str) -> bool:
+    if isinstance(n, Raiz) and objetivo in _incognitas(n.hijo, set()):
+        return True
+    return any(_tiene_raiz_de(h, objetivo) for h in hijos(n))
 
 
 # ---------------------------------------------------------------------------
@@ -341,7 +354,19 @@ def resolver_formula(texto: str) -> Solucion:
     if T_nombre not in letras:
         raise ErrorDeEntrada(f"La letra {T_nombre} no aparece en la fórmula (las letras son: "
                              f"{', '.join(sorted(letras)) or 'ninguna'}).")
-    if len(letras) == 1:                  # las lineales van al solucionador de ecuaciones habitual
+    raiz_objetivo = None
+    lados = (("izq", nI, nD), ("der", nD, nI))
+    raices_en_formula = [(nombre, lado, otro, _desenvolver(lado))
+                         for nombre, lado, otro in lados if _tiene_raiz_de(lado, T_nombre)]
+    if raices_en_formula:
+        if len(raices_en_formula) != 1 or not isinstance(raices_en_formula[0][3], Raiz):
+            raise ErrorMatematico("Para despejar una variable dentro de una raíz, esta debe ocupar un lado completo "
+                                  "de la igualdad.")
+        nombre, lado_raiz, otro_lado, nodo_raiz = raices_en_formula[0]
+        if T_nombre in _incognitas(otro_lado, set()):
+            raise ErrorMatematico("Primero debe quedar aislado el lado que contiene la raíz.")
+        raiz_objetivo = (nombre, lado_raiz, otro_lado, nodo_raiz)
+    if len(letras) == 1 and not raiz_objetivo:  # las lineales van al solucionador de ecuaciones habitual
         unica: dict = {}
         simbolo = unica.setdefault(T_nombre, sp.Symbol(T_nombre))
         polinomio = sp.Poly(sp.expand(_a_sympy(nI, unica) - _a_sympy(nD, unica)), simbolo)
@@ -364,6 +389,65 @@ def resolver_formula(texto: str) -> Solucion:
             numero=len(pasos) + 1, regla=regla, explicacion=explicacion, motivo=_MOTIVO[regla],
             operacion=operacion, resultado_parcial="", expresion=txt, latex=tex,
             intermedio=previo[0] if previo else "", latex_intermedio=previo[1] if previo else ""))
+
+    if raiz_objetivo:
+        _nombre_lado, lado_raiz, otro_lado, nodo_raiz = raiz_objetivo
+        raiz_txt, raiz_tex = a_texto(lado_raiz), a_latex(lado_raiz)
+        otro_txt, otro_tex = a_texto(otro_lado), a_latex(otro_lado)
+        radicando = _a_sympy(nodo_raiz.hijo, S)
+        otro = _a_sympy(otro_lado, S)
+        indice = nodo_raiz.indice
+        potencia = sp.expand(otro ** indice)
+        pot_txt, pot_tex = _fmt(potencia)
+        rad_txt, rad_tex = _fmt(radicando)
+        if _nombre_lado == "izq":
+            aislada_txt, aislada_tex = f"{raiz_txt} = {otro_txt}", f"{raiz_tex} = {otro_tex}"
+        else:
+            aislada_txt, aislada_tex = f"{raiz_txt} = {otro_txt}", f"{raiz_tex} = {otro_tex}"
+        condicion = f" Como el índice {indice} es par, se necesita que {otro_txt} ≥ 0."
+        pasos_raiz = [
+            Paso(numero=1, regla="aislar_raiz",
+                 explicacion=f"Dejamos sola la raíz en un lado de la igualdad.{condicion if indice % 2 == 0 else ''}",
+                 motivo="Antes de eliminar una raíz, conviene tener ese radical aislado para aplicar la misma operación "
+                        "a ambos lados.", operacion="aislar la raíz", resultado_parcial="",
+                 expresion=aislada_txt, latex=aislada_tex),
+            Paso(numero=2, regla="elevar_potencia",
+                 explicacion=f"Elevamos ambos lados a la potencia {indice} para eliminar la raíz."
+                             + (f" La condición {otro_txt} ≥ 0 conserva la igualdad con la raíz principal."
+                                if indice % 2 == 0 else ""),
+                 motivo="Elevar a la potencia que indica el índice es la operación inversa de extraer esa raíz.",
+                 operacion=f"potencia {indice}", resultado_parcial="",
+                 expresion=f"{pot_txt} = {rad_txt}", latex=f"{pot_tex} = {rad_tex}"),
+        ]
+        formula_cuadrada = f"despejar {T_nombre} en {pot_txt} = {rad_txt}"
+        solucion_cuadrada = resolver_formula(formula_cuadrada)
+        raices = sp.solve(potencia - radicando, T)
+        if len(raices) != 1:
+            raise ErrorMatematico("Después de eliminar la raíz, la fórmula debe quedar lineal en la variable a despejar.")
+        original_i, original_d = _a_sympy(nI, S), _a_sympy(nD, S)
+        diferencia = sp.simplify((original_i - original_d).subs(T, raices[0]))
+        if indice % 2 == 0:
+            diferencia = sp.refine(diferencia, sp.Q.nonnegative(otro))
+        if sp.simplify(diferencia) != 0:
+            raise ErrorMotor("La comprobación de la fórmula con raíz falló.")
+        pasos = pasos_raiz + [replace(p, numero=len(pasos_raiz) + i + 1)
+                              for i, p in enumerate(solucion_cuadrada.pasos)
+                              if p.regla != "comprobar"]
+        condicion_nota = f"Se requiere que {otro_txt} sea no negativo, porque la raíz es de índice par."
+        nota = " ".join(x for x in (solucion_cuadrada.nota,
+                                   condicion_nota if indice % 2 == 0 else "") if x)
+        pasos.append(Paso(numero=len(pasos) + 1, regla="comprobar",
+                          explicacion=(f"Comprobamos la respuesta en la fórmula original con raíz."
+                                       + (f" Se cumple bajo la condición {otro_txt} ≥ 0." if indice % 2 == 0 else "")
+                                       + " El despeje es correcto."),
+                          motivo=_MOTIVO["comprobar"], operacion=solucion_cuadrada.resultado,
+                          resultado_parcial="", expresion=solucion_cuadrada.resultado,
+                          latex=solucion_cuadrada.resultado_latex))
+        inicial_txt, inicial_tex = a_texto(_a_cocientes(nI)), a_latex(_a_cocientes(nI))
+        derecha_txt, derecha_tex = a_texto(_a_cocientes(nD)), a_latex(_a_cocientes(nD))
+        return replace(solucion_cuadrada, entrada=texto,
+                       expresion_inicial=f"despejar {T_nombre} en {inicial_txt} = {derecha_txt}",
+                       latex_inicial=f"{inicial_tex} = {derecha_tex}", pasos=pasos, nota=nota)
 
     # 1. Propiedad distributiva sobre lo escrito (sin juntar términos)
     dI, hI = _distribuir(nI, True)

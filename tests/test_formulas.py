@@ -185,6 +185,16 @@ def test_potencia_sin_soluciones_reales_se_informa():
         resolver_formula("despejar x en x² = −4")
 
 
+def test_despejar_variable_dentro_de_raiz_eleva_ambos_lados_y_comprueba():
+    sol = resolver_formula("despejar h en v = √(2*g*h)")
+    assert sol.resultado == "h = v^2/(2g)"
+    assert [p.regla for p in sol.pasos[:2]] == ["aislar_raiz", "elevar_potencia"]
+    assert sol.pasos[1].expresion == "v^2 = 2g·h"
+    assert sol.pasos[-1].regla == "comprobar"
+    assert "v sea no negativo" in sol.nota
+    assert "v ≥ 0" in sol.pasos[0].explicacion
+
+
 # ---------------------------------------------------------------------------
 # 3. Al azar, verificadas con SymPy y con números
 # ---------------------------------------------------------------------------
