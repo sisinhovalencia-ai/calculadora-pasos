@@ -157,10 +157,17 @@ def _raiz_racional(valor: Fraction) -> Fraction | None:
 
 
 def _factor_lineal(variable: str, raiz: Fraction) -> tuple[str, str]:
-    signo = "+" if raiz < 0 else "−"
-    magnitud = abs(raiz)
-    return (f"{variable} {signo} {formatear(magnitud)}",
-            f"{variable} {'+' if raiz < 0 else '-'} {formatear_latex(magnitud)}")
+    # Multiplicamos por el denominador de la raíz para que, por ejemplo,
+    # x = −1/2 se escriba como 2x + 1 = 0, igual que el factor original.
+    coeficiente = raiz.denominator
+    termino = -raiz.numerator
+    izquierda = f"{variable}" if coeficiente == 1 else f"{formatear(Fraction(coeficiente))}{variable}"
+    if termino == 0:
+        return izquierda, izquierda
+    signo = "+" if termino > 0 else "−"
+    magnitud = formatear(Fraction(abs(termino)))
+    latex_signo = "+" if termino > 0 else "-"
+    return (f"{izquierda} {signo} {magnitud}", f"{izquierda} {latex_signo} {magnitud}")
 
 
 def _paso(numero: int, regla: str, explicacion: str, motivo: str, expresion: str, latex: str,
@@ -275,7 +282,7 @@ def resolver_cuadratica(texto: str) -> Solucion:
             resultado_latex = f"{variable} = {formatear_latex(r1)}\\quad\\text{{(raíz doble)}}"
         else:
             resultado = f"{variable}₁ = {formatear(r1)}, {variable}₂ = {formatear(r2)}"
-            resultado_latex = (f"{variable}_1 = {formatear_latex(r1)},\\quad"
+            resultado_latex = (f"{variable}_1 = {formatear_latex(r1)},\\quad "
                                f"{variable}_2 = {formatear_latex(r2)}")
         metodo = "factorización"
     else:
@@ -306,7 +313,7 @@ def resolver_cuadratica(texto: str) -> Solucion:
             resultado_latex = f"{variable} = {_latex_raiz(raiz_menos, sp)}\\quad\\text{{(raíz doble)}}"
         else:
             resultado = f"{variable}₁ = {_texto_raiz(raiz_menos, sp)}, {variable}₂ = {_texto_raiz(raiz_mas, sp)}"
-            resultado_latex = (f"{variable}_1 = {_latex_raiz(raiz_menos, sp)},\\quad"
+            resultado_latex = (f"{variable}_1 = {_latex_raiz(raiz_menos, sp)},\\quad "
                                f"{variable}_2 = {_latex_raiz(raiz_mas, sp)}")
         metodo = "fórmula general"
 

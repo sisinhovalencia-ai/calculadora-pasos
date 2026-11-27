@@ -144,7 +144,7 @@ mark.marca {
   -webkit-box-decoration-break: clone; box-decoration-break: clone;
 }
 /* Una fórmula larga se desliza dentro de su renglón; la página nunca se desborda */
-.paso-expr { max-width: 100%; overflow-x: auto; padding: 2px 0; }
+.paso-expr { max-width: 100%; overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
 .paso-expr math { font-size: 1.7rem; color: var(--tinta); }
 .paso-previa math { font-size: 1.35rem; color: var(--suave); }   /* la operación en los dos lados */
 .formula-plana { font-size: 1.5rem; color: var(--tinta); }
@@ -164,7 +164,7 @@ details.porque p { margin: 6px 0 0; font-size: 1rem; line-height: 1.5; max-width
 .final { padding-bottom: 0; }
 .final-marca { text-align: right; color: var(--margen); font-weight: 700; font-size: 1.6rem; line-height: 1.3; }
 .final-etq { margin: 0 0 4px; color: var(--suave); font-size: 1rem; }
-.final-valor { display: inline-block; max-width: 100%; overflow-x: auto; padding-bottom: 4px; border-bottom: 6px double var(--margen); }
+.final-valor { display: inline-block; max-width: 100%; overflow-x: auto; overflow-y: hidden; padding: 4px 0; border-bottom: 6px double var(--margen); }
 .final-valor math { font-size: 2.4rem; color: var(--tinta); }
 .final-decimal { margin: 12px 0 0; color: var(--suave); font-size: 1.05rem; }
 
