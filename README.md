@@ -1,9 +1,9 @@
-# Calculadora paso a paso
+# MatrixOps — Tu tutor matemático paso a paso
 
 Motor matemático que resuelve ejercicios **explicando cada paso**, en español.
 Proyecto a largo plazo: empieza por aritmética básica y crece (ecuaciones, álgebra tipo Baldor, derivadas, integrales…).
 
-> Cambia el nombre de la carpeta/proyecto cuando tengas el definitivo. Nada en el código depende de él.
+La interfaz usa la identidad académica MatrixOps, con paneles de motor matemático, resolución guiada y recursos de estudio.
 
 ## Instalar (una sola vez)
 

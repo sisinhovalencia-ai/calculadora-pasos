@@ -19,13 +19,13 @@ Notas para quien retome esto:
 
 import asyncio
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from html import escape
 
 from nicegui import app, ui
 from starlette.responses import PlainTextResponse
 
-from motor import ErrorMotor, Solucion, resolver_columnas
+from motor import ErrorDeEntrada, ErrorMotor, Solucion, resolver_columnas
 from motor.algebra import separar_comando, tiene_comando
 from motor.formulario import TEMAS
 from motor.formulario import calcular as calcular_formula
@@ -39,7 +39,7 @@ from .formulas import mathml, resaltar
 
 log = logging.getLogger("web")
 
-TITULO = "Calculadora paso a paso"
+TITULO = "MatrixOps | Tu tutor matemático paso a paso"
 MAX_CARACTERES = 200   # un ejercicio escolar nunca es más largo; evita entradas enormes
 
 EJEMPLOS = ["2 + 3 × (4 − 1)^2", "1/2 + 1/3", "4/6 + 1/3", "3 1/2 + 2 3/4",
@@ -95,6 +95,9 @@ class Estado:
     visibles: int = 0          # cuántos pasos se muestran ahora
     uno_a_uno: bool = False
     columnas: bool = False
+    tipo_error: str | None = None
+    historial: list[dict[str, str]] = field(default_factory=list)
+    resolviendo: bool = False
 
 
 def _html(contenido: str, *, tag: str = "div"):
@@ -109,6 +112,22 @@ def _js(codigo: str) -> None:
         ui.run_javascript(codigo)
     except Exception:  # noqa: BLE001
         pass
+
+
+def _tipo_motor(sol: Solucion) -> tuple[str, str]:
+    """Nombres comprensibles para el panel técnico, derivados del tipo real del motor."""
+    tipos = {
+        "aritmetica": ("Aritmética", "Python · fracciones exactas"),
+        "ecuacion_lineal": ("Ecuación lineal", "Python · solucionador lineal"),
+        "desigualdad_lineal": ("Desigualdad lineal", "Python · solucionador lineal"),
+        "factorizacion": ("Factorización", "SymPy · verificación algebraica"),
+        "fraccion_algebraica": ("Fracción algebraica", "SymPy · verificación algebraica"),
+        "radicales": ("Radicales", "Motor de radicales · comprobación numérica"),
+        "polinomio": ("Expresión algebraica", "SymPy · verificación algebraica"),
+        "formula": ("Despeje de fórmula", "SymPy · comprobación de la fórmula"),
+        "formula_numerica": ("Cálculo con fórmula", "SymPy · comprobación de la fórmula"),
+    }
+    return tipos.get(sol.tipo, (sol.tipo.replace("_", " ").capitalize(), "Motor Python"))
 
 
 _MOVIMIENTO = "matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'"
@@ -338,6 +357,87 @@ async def inicio(q: str = "") -> None:
             else:
                 mostrar_final(sol)
 
+    @ui.refreshable
+    def motor_live() -> None:
+        sol = est.sol
+        if est.resolviendo:
+            estado = '<div class="motor-espera"><strong>Resolviendo ejercicio…</strong><small>El despachador está seleccionando el solucionador.</small></div>'
+            caja = '<div class="motor-resumen"><span class="motor-tipo">Análisis en curso</span><small>Esperando el resultado del motor.</small></div>'
+            linea = escape((entrada.value or "").strip())
+        elif sol is not None:
+            tipo, motor = _tipo_motor(sol)
+            pasos = f"{len(sol.pasos)} paso{'s' if len(sol.pasos) != 1 else ''}"
+            etapa = "Resultado listo"
+            if est.visibles < len(sol.pasos):
+                etapa = f"Mostrando {est.visibles} de {len(sol.pasos)} pasos"
+            detalle = []
+            if sol.nota:
+                detalle.append(sol.nota)
+            if sol.resultado_decimal:
+                signo = "=" if sol.decimal_exacto else "≈"
+                detalle.append(f"Decimal {signo} {sol.resultado_decimal}")
+            detalles = "".join(f'<small class="motor-detalle">{escape(item)}</small>' for item in detalle)
+            estado = (
+                '<div class="verificado"><span>✓</span><div><strong>Comprobación completada</strong>'
+                f'<small>{escape(etapa)} · {escape(pasos)}</small>{detalles}</div></div>'
+            )
+            caja = (f'<div class="motor-resumen"><span class="motor-tipo">{escape(tipo)}</span>'
+                    f'<span class="motor-pasos">{escape(pasos)}</span><small>{escape(motor)}</small></div>')
+            linea = f"{escape(sol.entrada)} → {escape(sol.expresion_inicial)}"
+        elif est.error:
+            warning = est.tipo_error == "entrada"
+            color = "warning" if warning else "error"
+            estado = (f'<div class="motor-estado {color}"><strong>{"Revisa la entrada" if warning else "Error al resolver"}</strong>'
+                      f'<small>{escape(est.error)}</small></div>')
+            caja = '<div class="motor-resumen"><span class="motor-tipo">Sin solución</span><small>Corrige el ejercicio e inténtalo de nuevo.</small></div>'
+            linea = "Entrada no interpretada" if warning else "Ejercicio no resuelto"
+        else:
+            estado = ('<div class="motor-espera"><strong>En espera de un ejercicio</strong>'
+                      '<small>Al resolver, aquí verás el tipo, los pasos y el motor.</small></div>')
+            caja = '<div class="motor-resumen"><span class="motor-tipo">Listo para resolver</span><small>Python · motor simbólico según el ejercicio</small></div>'
+            linea = "ejercicio → expresión → procedimiento → verificación"
+        _html(
+            '<div class="codigo-card motor-live-card"><div class="codigo-cabecera"><span></span><span></span><span></span><small>actividad del motor</small></div>'
+            f'<div class="motor-cadena">{linea}</div>{caja}{estado}</div>'
+        )
+
+    @ui.refreshable
+    def guia_live() -> None:
+        tiene_sol = est.sol is not None
+        final_visible = tiene_sol and est.visibles >= len(est.sol.pasos)
+        fase = "1" if not tiene_sol else ("3" if final_visible else "2")
+        with ui.row().classes("guia-paso guia-tarjeta items-start no-wrap w-full cursor-pointer" +
+                              (" activa" if fase == "1" else "")).on("click", enfocar_planteamiento):
+            ui.label("01").classes("guia-num shrink-0")
+            with ui.column().classes("guia-texto gap-0"):
+                ui.label("Plantea").classes("guia-titulo")
+                ui.label("Escribe o elige un ejercicio.").classes("guia-descripcion")
+        with ui.row().classes("guia-paso guia-tarjeta items-start no-wrap w-full" +
+                              (" deshabilitada cursor-default" if not tiene_sol else " cursor-pointer") +
+                              (" activa" if fase == "2" else "")).on("click", ir_a_observar):
+            ui.label("02").classes("guia-num shrink-0")
+            with ui.column().classes("guia-texto gap-0"):
+                ui.label("Observa").classes("guia-titulo")
+                ui.label("Sigue cada operación explicada.").classes("guia-descripcion")
+        with ui.row().classes("guia-paso guia-tarjeta items-start no-wrap w-full" +
+                              (" deshabilitada cursor-default" if not tiene_sol else " cursor-pointer") +
+                              (" completada" if final_visible else "")).on("click", ir_a_comprobar):
+            ui.label("03").classes("guia-num shrink-0")
+            with ui.column().classes("guia-texto gap-0"):
+                ui.label("Comprueba").classes("guia-titulo")
+                ui.label("Ve al resultado verificado.").classes("guia-descripcion")
+        with ui.element("div").classes("historial-rapido"):
+            _html('<div class="historial-titulo">HISTORIAL DE ESTA SESIÓN</div>')
+            if est.historial:
+                for item in est.historial[:4]:
+                    ui.button(f'{item["entrada"]}  →  {item["resultado"]}',
+                              on_click=lambda t=item["entrada"]: usar_ejemplo(t), color=None) \
+                        .classes("historial-item").props("flat no-caps").tooltip("Volver a resolver este ejercicio")
+            else:
+                ui.button("Probar este ejemplo · x + 3 = 8", on_click=lambda: usar_ejemplo("x + 3 = 8"), color=None) \
+                    .classes("historial-demo").props("flat no-caps")
+                _html('<small class="historial-ayuda">Resuelve un ejercicio y aparecerá aquí para repetirlo.</small>')
+
     def bajar_al_resultado() -> None:
         """En el celular el resultado queda más abajo que la pantalla: bajamos hasta él."""
         _js("setTimeout(() => { const z = document.querySelector('.zona'); if (z) z.scrollIntoView({"
@@ -347,9 +447,18 @@ async def inicio(q: str = "") -> None:
     async def resolver_ejercicio() -> None:
         texto = (entrada.value or "").strip()[:MAX_CARACTERES]
         if not texto:
-            est.sol, est.error = None, "Escribe un ejercicio para empezar, por ejemplo 1/2 + 1/3."
+            est.sol, est.error, est.tipo_error = None, "Escribe un ejercicio para empezar, por ejemplo 1/2 + 1/3.", "entrada"
+            est.resolviendo = False
             pintar()
+            motor_live.refresh()
+            guia_live.refresh()
             return
+        est.error = est.tipo_error = None
+        est.sol = None
+        est.resolviendo = True
+        pintar()
+        motor_live.refresh()
+        guia_live.refresh()
         try:
             # En un hilo y con tiempo máximo: un ejercicio pesado no congela la página de los demás usuarios.
             funcion = resolver_columnas if est.columnas else resolver_auto
@@ -357,19 +466,33 @@ async def inicio(q: str = "") -> None:
         except asyncio.TimeoutError:
             log.warning("Tardó más de %s s: %r", TIEMPO_MAXIMO, texto)
             est.sol = None
+            est.tipo_error = "motor"
             est.error = ("Este ejercicio tarda demasiado en resolverse. Prueba con uno más sencillo "
                          "(menos términos o exponentes más pequeños).")
+        except ErrorDeEntrada as e:
+            est.sol = None
+            est.tipo_error = "entrada"
+            est.error = str(e)
         except ErrorMotor as e:
             est.sol = None
+            est.tipo_error = "motor"
             est.error = _mensaje_columnas(texto, e) if est.columnas else str(e)
         except Exception:  # noqa: BLE001 - nunca mostrar trazas técnicas al estudiante
             log.exception("Error inesperado al resolver %r", texto)
             est.sol = None
+            est.tipo_error = "motor"
             est.error = "Algo salió mal con esta expresión. Revísala e inténtalo de nuevo."
         else:
             est.sol, est.error = sol, None
+            est.tipo_error = None
             est.visibles = 1 if est.uno_a_uno and sol.pasos else len(sol.pasos)
+            est.historial = [item for item in est.historial if item["entrada"] != texto]
+            est.historial.insert(0, {"entrada": texto, "resultado": sol.resultado})
+            del est.historial[4:]
+        est.resolviendo = False
         pintar()
+        motor_live.refresh()
+        guia_live.refresh()
         bajar_al_resultado()
 
     def siguiente() -> None:
@@ -391,12 +514,16 @@ async def inicio(q: str = "") -> None:
         else:
             _js("const p = document.querySelector('.pasos > li:last-child'); if (p) "
                 f"p.scrollIntoView({{behavior: {_MOVIMIENTO}, block: 'nearest'}});")
+        motor_live.refresh()
+        guia_live.refresh()
 
     def cambiar_modo(e) -> None:
         est.uno_a_uno = bool(e.value)
         if est.sol is not None:
             est.visibles = 1 if e.value and est.sol.pasos else len(est.sol.pasos)
             pintar()
+            motor_live.refresh()
+            guia_live.refresh()
 
     async def cambiar_columnas(e) -> None:
         nuevo = bool(e.value)
@@ -412,6 +539,58 @@ async def inicio(q: str = "") -> None:
         est.columnas = columnas
         modo_columnas.value = columnas   # `cambiar_columnas` ve que ya coincide y no vuelve a resolver
         await resolver_ejercicio()
+
+    def al_editar(e) -> None:
+        """Al cambiar el campo, invalida la solución anterior y vuelve a la fase Plantea."""
+        if est.sol is not None or est.error is not None:
+            est.sol = est.error = est.tipo_error = None
+            est.visibles = 0
+            pintar()
+        motor_live.refresh()
+        guia_live.refresh()
+
+    def enfocar_planteamiento() -> None:
+        _js("const i = document.querySelector('.entrada input'); if (i) { i.focus(); i.scrollIntoView({behavior: 'smooth', block: 'center'}); }")
+
+    async def ir_a_observar() -> None:
+        if est.sol is None:
+            if (entrada.value or "").strip():
+                est.uno_a_uno = True
+                modo_uno.value = True
+                await resolver_ejercicio()
+            else:
+                enfocar_planteamiento()
+            return
+        if est.sol.pasos and est.visibles >= len(est.sol.pasos):
+            est.uno_a_uno = True
+            modo_uno.value = True
+            est.visibles = 1
+            pintar()
+            motor_live.refresh()
+            guia_live.refresh()
+        _js("const p = document.querySelector('.pasos'); if (p) p.scrollIntoView({behavior: 'smooth', block: 'start'});")
+
+    def ir_a_comprobar() -> None:
+        if est.sol is None:
+            enfocar_planteamiento()
+            ui.notify("Resuelve un ejercicio para ver su comprobación.", type="info")
+            return
+        if est.visibles < len(est.sol.pasos):
+            est.visibles = len(est.sol.pasos)
+            pintar()
+            motor_live.refresh()
+            guia_live.refresh()
+        _js("const f = document.querySelector('.final'); if (f) f.scrollIntoView({behavior: 'smooth', block: 'center'});")
+
+    def ir_a_algebra() -> None:
+        pestanas.value = pestana_calculadora
+        elegir_nivel("Álgebra")
+
+    def ir_a_formulas() -> None:
+        pestanas.value = pestana_formulas
+
+    def avisar_calculo() -> None:
+        ui.notify("En una próxima etapa llegarán los módulos de derivadas e integrales.", type="info", timeout=3500)
 
     def pulsar(tecla: str) -> None:
         actual = entrada.value or ""
@@ -451,71 +630,131 @@ async def inicio(q: str = "") -> None:
 
     with ui.element("main").classes("hoja"):
         _html(
-            f'<h1 class="titulo">{TITULO}</h1>'
-            '<p class="subtitulo">Escribe una operación y mira cómo se resuelve, un paso a la vez.</p>'
+            '<header class="marca-cabecera">'
+            '<div class="marca-simbolo" aria-hidden="true"><span>∑</span><i>✓</i></div>'
+            '<div class="marca-texto"><h1 class="titulo"><span>MATRIX</span><b>OPS</b></h1>'
+            '<p class="subtitulo">Tu tutor matemático paso a paso</p>'
+            '<p class="lema">COMPRENDE <i>•</i> APRENDE <i>•</i> RESUELVE</p></div>'
+            '<div class="marca-sello"><span class="sello-punto"></span>MATEMÁTICAS CON PROCEDIMIENTO</div>'
+            '</header>'
         )
 
-        with ui.tabs().classes("pestanas").props("align=left no-caps") as pestanas:
-            pestana_calculadora = ui.tab("Calculadora").mark("pestana-calculadora")
-            pestana_formulas = ui.tab("Fórmulas").mark("pestana-formulas")
-        with ui.tab_panels(pestanas, value=pestana_calculadora).classes("paneles"):
-            with ui.tab_panel(pestana_calculadora):
+        with ui.element("div").classes("workspace-grid"):
+            with ui.element("aside").classes("panel-lateral panel-motor"):
+                _html(
+                    '<div class="panel-kicker">MOTOR MATEMÁTICO</div>'
+                    '<h2>Del ejercicio a la comprensión</h2>'
+                    '<p class="panel-copy">Actividad real del despachador y los solucionadores.</p>'
+                    '<div class="motor-badges"><span>Python</span><span>SymPy</span></div>'
+                )
+                motor_live()
+                _html('<h3>Módulos</h3>')
+                with ui.row().classes("modulos modulos-botones flex-wrap gap-2"):
+                    (ui.label("Álgebra").classes("modulo-chip cursor-pointer")
+                     .props('role="button" tabindex="0"').on("click", ir_a_algebra)
+                     .on("keydown.enter", ir_a_algebra).on("keydown.space", ir_a_algebra))
+                    (ui.label("Física · fórmulas").classes("modulo-chip cursor-pointer")
+                     .props('role="button" tabindex="0"').on("click", ir_a_formulas)
+                     .on("keydown.enter", ir_a_formulas).on("keydown.space", ir_a_formulas))
+                    (ui.label("Cálculo · próximamente").classes("modulo-chip futuro cursor-pointer")
+                     .props('role="button" tabindex="0"').on("click", avisar_calculo)
+                     .on("keydown.enter", avisar_calculo).on("keydown.space", avisar_calculo))
+                _html('<h3>Estructura de una expresión</h3>')
+                with ui.element("div").classes("arbol arbol-clickable cursor-pointer").props(
+                        'role="button" tabindex="0" aria-label="Resolver el ejemplo (2 + 3) por 4"') \
+                        .on("click", lambda: usar_ejemplo("(2 + 3) * 4")):
+                    _html(
+                        '<span class="arbol-prompt">Pulsa para probar</span>'
+                        '<svg class="arbol-svg" viewBox="0 0 220 94" role="img" aria-label="Árbol de la expresión (2 + 3) por 4">'
+                        '<g class="arbol-lineas"><path d="M110 26 V34 M55 34 H165 M55 34 V43 M165 34 V43 M55 64 V72 M40 72 H70 M40 72 V80 M70 72 V80 M165 64 V80"/></g>'
+                        '<rect class="arbol-caja raiz" x="98" y="3" width="24" height="23" rx="5"/><text class="arbol-operador" x="110" y="20" text-anchor="middle">×</text>'
+                        '<rect class="arbol-caja" x="18" y="43" width="74" height="21" rx="5"/><text class="arbol-expresion" x="55" y="57" text-anchor="middle">(2 + 3)</text>'
+                        '<rect class="arbol-caja" x="128" y="43" width="74" height="21" rx="5"/><text class="arbol-expresion" x="165" y="57" text-anchor="middle">4</text>'
+                        '<text class="arbol-hoja" x="40" y="91" text-anchor="middle">2</text><text class="arbol-hoja" x="70" y="91" text-anchor="middle">3</text><text class="arbol-hoja" x="165" y="91" text-anchor="middle">4</text></svg>'
+                        '<span class="arbol-cta">Resolver (2 + 3) × 4</span>'
+                    ).classes("arbol-content")
 
-                entrada = ui.input(label="Tu ejercicio", placeholder="Ej.: 2 + 3 × (4 − 1)^2").classes("entrada")
-                entrada.props(f'borderless stack-label autocomplete="off" inputmode="text" maxlength="{MAX_CARACTERES}"')
-                entrada.on("keydown.enter", resolver_ejercicio)
+            with ui.element("section").classes("panel-central"):
+                _html('<div class="centro-encabezado"><div><div class="panel-kicker">ÁREA DE RESOLUCIÓN</div>'
+                      '<h2>Aprende resolviendo</h2></div><span class="estado-en-linea"><i></i> Motor listo</span></div>')
 
-                with ui.element("div").classes("fila-accion"):
-                    ui.button("Resolver", on_click=resolver_ejercicio, color=None).classes("boton-resolver").props("unelevated no-caps")
-                    ui.switch("Un paso a la vez", on_change=cambiar_modo).mark("un-paso")
-                    modo_columnas = ui.switch("En columnas (a mano)", on_change=cambiar_columnas)
-                    modo_columnas.mark("modo-columnas")
+                with ui.tabs().classes("pestanas").props("align=left no-caps") as pestanas:
+                    pestana_calculadora = ui.tab("Calculadora").mark("pestana-calculadora")
+                    pestana_formulas = ui.tab("Fórmulas").mark("pestana-formulas")
+                with ui.tab_panels(pestanas, value=pestana_calculadora).classes("paneles"):
+                    with ui.tab_panel(pestana_calculadora):
 
-                with ui.element("div").classes("fila-nivel"):
-                    ui.label("Nivel:")
-                    with ui.element("div").classes("niveles"):
-                        for nombre in NIVELES:
-                            botones_nivel[nombre] = (
-                                ui.button(nombre, on_click=lambda n=nombre: elegir_nivel(n), color=None)
-                                .classes("nivel" + (" activo" if nombre == "Todo" else "")).props("flat no-caps")
-                                .mark(f"nivel-{nombre}"))
+                        entrada = ui.input(label="Tu ejercicio", placeholder="Ej.: 2 + 3 × (4 − 1)^2").classes("entrada")
+                        entrada.props(f'borderless stack-label autocomplete="off" inputmode="text" maxlength="{MAX_CARACTERES}"')
+                        entrada.on("keydown.enter", resolver_ejercicio)
+                        entrada.on_value_change(al_editar)
 
-                with ui.element("div").classes("teclado"):
-                    for texto, es_op in TECLAS:
-                        boton = ui.button(texto, on_click=lambda t=texto: pulsar(t), color=None).props("flat no-caps")
-                        boton.classes("tecla op" if es_op else "tecla").mark(f"tecla-{texto}")
-                        teclas_nivel.append((boton, NIVEL_DE_TECLA.get(texto, 1)))
-                        if texto in ETIQUETAS_TECLAS:
-                            boton.props(f'aria-label="{ETIQUETAS_TECLAS[texto]}"')
-                    for comando in ("simplificar",):
-                        b = ui.button(comando, on_click=lambda c=comando: pulsar(c), color=None).props("flat no-caps")
-                        b.classes("tecla tecla-ancha op").mark(f"tecla-{comando}")
-                        teclas_nivel.append((b, NIVEL_DE_TECLA[comando]))
-                    ancho = ui.button("espacio", on_click=lambda: pulsar("espacio"), color=None).props("flat no-caps")
-                    ancho.classes("tecla tecla-ancha").mark("tecla-espacio")
-                    teclas_nivel.append((ancho, 1))
-                    despejar = ui.button("despejar", on_click=lambda: pulsar("despejar"), color=None).props("flat no-caps")
-                    despejar.classes("tecla tecla-ancha op").mark("tecla-despejar")
-                    teclas_nivel.append((despejar, 2))
-                    for comando in ("factorizar", "desarrollar"):
-                        b = ui.button(comando, on_click=lambda c=comando: pulsar(c), color=None).props("flat no-caps")
-                        b.classes("tecla tecla-ancha op").mark(f"tecla-{comando}")
-                        teclas_nivel.append((b, NIVEL_DE_TECLA[comando]))
+                        with ui.element("div").classes("fila-accion"):
+                            ui.button("Resolver", on_click=resolver_ejercicio, color=None).classes("boton-resolver").props("unelevated no-caps")
+                            modo_uno = ui.switch("Un paso a la vez", on_change=cambiar_modo).mark("un-paso")
+                            modo_columnas = ui.switch("En columnas (a mano)", on_change=cambiar_columnas)
+                            modo_columnas.mark("modo-columnas")
 
-                filas_nivel.append((_fila_ejemplos("Prueba con:", EJEMPLOS, usar_ejemplo), 1))
-                filas_nivel.append((_fila_ejemplos("Ecuaciones:", EJEMPLOS_ECUACIONES, usar_ejemplo), 2))
-                filas_nivel.append((_fila_ejemplos("Desigualdades:", EJEMPLOS_DESIGUALDADES, usar_ejemplo), 2))
-                filas_nivel.append((_fila_ejemplos("Fórmulas:", EJEMPLOS_FORMULAS, usar_ejemplo), 2))
-                filas_nivel.append((_fila_ejemplos("Álgebra:", EJEMPLOS_ALGEBRA, usar_ejemplo), 3))
-                filas_nivel.append((_fila_ejemplos("Factorizar:", EJEMPLOS_FACTORIZAR, usar_ejemplo), 3))
-                filas_nivel.append((_fila_ejemplos("Fracciones:", EJEMPLOS_FRACCIONES, usar_ejemplo), 3))
-                filas_nivel.append((_fila_ejemplos("Raíces:", EJEMPLOS_RAICES, usar_ejemplo), 3))
-                filas_nivel.append((_fila_ejemplos("A mano:", EJEMPLOS_COLUMNAS, lambda t: usar_ejemplo(t, columnas=True)), 1))
+                        with ui.element("div").classes("fila-nivel"):
+                            ui.label("Nivel:")
+                            with ui.element("div").classes("niveles"):
+                                for nombre in NIVELES:
+                                    botones_nivel[nombre] = (
+                                        ui.button(nombre, on_click=lambda n=nombre: elegir_nivel(n), color=None)
+                                        .classes("nivel" + (" activo" if nombre == "Todo" else "")).props("flat no-caps")
+                                        .mark(f"nivel-{nombre}"))
 
-                # aria-live: el lector de pantalla anuncia el resultado cuando aparece
-                zona = ui.element("div").classes("zona").props('aria-live="polite"')
-            with ui.tab_panel(pestana_formulas):
-                _formulario()
+                        with ui.element("div").classes("teclado"):
+                            for texto, es_op in TECLAS:
+                                boton = ui.button(texto, on_click=lambda t=texto: pulsar(t), color=None).props("flat no-caps")
+                                boton.classes("tecla op" if es_op else "tecla").mark(f"tecla-{texto}")
+                                teclas_nivel.append((boton, NIVEL_DE_TECLA.get(texto, 1)))
+                                if texto in ETIQUETAS_TECLAS:
+                                    boton.props(f'aria-label="{ETIQUETAS_TECLAS[texto]}"')
+                            for comando in ("simplificar",):
+                                b = ui.button(comando, on_click=lambda c=comando: pulsar(c), color=None).props("flat no-caps")
+                                b.classes("tecla tecla-ancha op").mark(f"tecla-{comando}")
+                                teclas_nivel.append((b, NIVEL_DE_TECLA[comando]))
+                            ancho = ui.button("espacio", on_click=lambda: pulsar("espacio"), color=None).props("flat no-caps")
+                            ancho.classes("tecla tecla-ancha").mark("tecla-espacio")
+                            teclas_nivel.append((ancho, 1))
+                            despejar = ui.button("despejar", on_click=lambda: pulsar("despejar"), color=None).props("flat no-caps")
+                            despejar.classes("tecla tecla-ancha op").mark("tecla-despejar")
+                            teclas_nivel.append((despejar, 2))
+                            for comando in ("factorizar", "desarrollar"):
+                                b = ui.button(comando, on_click=lambda c=comando: pulsar(c), color=None).props("flat no-caps")
+                                b.classes("tecla tecla-ancha op").mark(f"tecla-{comando}")
+                                teclas_nivel.append((b, NIVEL_DE_TECLA[comando]))
+
+                        filas_nivel.append((_fila_ejemplos("Prueba con:", EJEMPLOS, usar_ejemplo), 1))
+                        filas_nivel.append((_fila_ejemplos("Ecuaciones:", EJEMPLOS_ECUACIONES, usar_ejemplo), 2))
+                        filas_nivel.append((_fila_ejemplos("Desigualdades:", EJEMPLOS_DESIGUALDADES, usar_ejemplo), 2))
+                        filas_nivel.append((_fila_ejemplos("Fórmulas:", EJEMPLOS_FORMULAS, usar_ejemplo), 2))
+                        filas_nivel.append((_fila_ejemplos("Álgebra:", EJEMPLOS_ALGEBRA, usar_ejemplo), 3))
+                        filas_nivel.append((_fila_ejemplos("Factorizar:", EJEMPLOS_FACTORIZAR, usar_ejemplo), 3))
+                        filas_nivel.append((_fila_ejemplos("Fracciones:", EJEMPLOS_FRACCIONES, usar_ejemplo), 3))
+                        filas_nivel.append((_fila_ejemplos("Raíces:", EJEMPLOS_RAICES, usar_ejemplo), 3))
+                        filas_nivel.append((_fila_ejemplos("A mano:", EJEMPLOS_COLUMNAS, lambda t: usar_ejemplo(t, columnas=True)), 1))
+
+                        # aria-live: el lector de pantalla anuncia el resultado cuando aparece
+                        zona = ui.element("div").classes("zona").props('aria-live="polite"')
+                    with ui.tab_panel(pestana_formulas):
+                        _formulario()
+
+            with ui.element("aside").classes("panel-lateral panel-guia"):
+                _html(
+                    '<div class="panel-kicker">GUÍA DE APRENDIZAJE</div><h2>Entiende cada paso</h2>'
+                    '<p class="panel-copy">Avanza con el ejercicio: plantea, observa y comprueba.</p>'
+                )
+                guia_live()
+
+        with ui.element("section").classes("recursos-estudio"):
+            _html('<div class="recursos-titulo"><div class="panel-kicker">RINCÓN DE ESTUDIO</div>'
+                  '<h2>Aprender también es practicar</h2></div>'
+                  '<div class="recurso"><span class="recurso-icono">▤</span><div><strong>Álgebra de Baldor</strong><small>Una referencia clásica para practicar álgebra.</small></div></div>'
+                  '<div class="recurso"><span class="recurso-icono">✎</span><div><strong>Cuaderno de fórmulas</strong><small>Escribe, compara y conserva tus procedimientos.</small></div></div>'
+                  '<div class="recurso"><span class="recurso-icono">⌁</span><div><strong>Física básica</strong><small>Explora fórmulas y despeja sus variables.</small></div></div>'
+                  '<div class="frase-estudio">“Estudia, aprende, logra más.”</div>')
 
     if q:
         entrada.value = q[:MAX_CARACTERES]
