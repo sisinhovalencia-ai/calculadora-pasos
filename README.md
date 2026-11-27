@@ -33,6 +33,8 @@ python cli.py "7845 ÷ 12" --columnas     # a mano, en columnas (suma, resta, ×
 python cli.py "2x + 3 = 11"              # ecuaciones: basta con escribir el signo =
 python cli.py "−2x + 1 ≥ 7"             # desigualdades: <  >  ≤  ≥  (también <= y >=)
 python cli.py "despejar t en v = d/t"   # despejar una letra de una fórmula
+python cli.py "despejar r en A = πr²"    # despeje cuadrático: devuelve ambas raíces
+python cli.py "2x + y = 5; x − y = 1"    # sistema lineal 2×2
 python cli.py                            # modo interactivo
 ```
 
@@ -57,8 +59,8 @@ motor/
   aritmetica.py  solucionador de aritmética (jerarquía de operaciones)
   columnas.py    operaciones "a mano": suma, resta, multiplicación y división larga en columnas
   ecuaciones.py  ecuaciones y desigualdades lineales de una incógnita (2x + 3 = 11, 2x + 3 < 11), con comprobación
-  formulas.py    despejar una letra de una fórmula (despejar t en v = d/t); usa SymPy
-  formulario.py  el Formulario: 28 fórmulas (física, geometría, ingeniería industrial) con unidades; despeja y calcula con números
+  formulas.py    despejar fórmulas lineales y potencias aisladas; usa SymPy
+  formulario.py  el Formulario: física, geometría e ingeniería con unidades; despeja y calcula con números
   expr.py        ★ expresiones algebraicas para ESCRIBIR pasos (x² + 5x + 6, (x − 3)(x + 3), 2√3): dibuja como un libro
   algebra.py     comandos (factorizar, desarrollar, simplificar), libreta de pasos y verificación numérica
   polinomios.py  desarrollar y reducir: productos notables, distributiva, términos semejantes
@@ -162,8 +164,9 @@ se lee la igualdad al revés.
 
 - Al final aparece una **nota con los supuestos**: "Se supone que t, v no valen 0" (no se puede dividir entre 0).
 - La comprobación es independiente: reemplaza la respuesta en la fórmula original y la compara con el resolvedor de SymPy.
-- La letra a despejar tiene que ser de **primer grado** (después de quitar los denominadores). No despeja letras
-  elevadas a una potencia o dentro de una raíz (`x² = a`), ni subíndices (`x0`): usa letras distintas.
+- Además de fórmulas lineales, se admite la incógnita al cuadrado cuando queda como potencia aislada (`A = πr²`,
+  `K = mv²/2`). El resultado muestra las dos ramas `±√(...)`, avisa de la condición para soluciones reales y comprueba ambas.
+  Las potencias mezcladas con otros términos y los subíndices (`x0`) aún no se admiten.
 - Una fórmula con **una sola letra** se resuelve como ecuación normal.
 - Atención: «de» (dos letras pegadas) se lee como la palabra "de" (multiplicar); para d·e escribe `d·e` o `d e`.
 - SymPy se instala con `requirements.txt` pero **solo se carga cuando despejas una fórmula**: arrancar la app y
@@ -182,9 +185,16 @@ desarrollar simplificar`. Escribir a mano cualquier cosa funciona en todos los n
   operaciones con los pasos de siempre; la respuesta sale con su unidad (`R = 4 Ω`).
 
 Temas: Movimiento · Fuerza, trabajo y energía · Electricidad · Materia y calor · Geometría · Ingeniería industrial y finanzas
-(28 fórmulas, 93 despejes posibles). Cada letra dice qué significa y en qué unidad va. Por ahora todas son de **primer grado** en cada
-letra (así se puede despejar cualquiera); las que llevan potencias o raíces (energía cinética, área del círculo) llegan con la Etapa 4.
+(30 fórmulas, 98 despejes posibles). Cada letra dice qué significa y en qué unidad va. Incluye energía cinética y área del círculo;
+al despejar la rapidez o el radio aparecen ambas raíces algebraicas (la nota de cada fórmula recuerda que físicamente se toman no negativas).
 Para π se usa 3,1416 y se avisa. Para agregar una fórmula nueva basta una línea en `motor/formulario.py`.
+
+## Etapa 4: cuadráticas y sistemas lineales
+
+El motor resuelve ecuaciones cuadráticas con factorización cuando es posible y fórmula general en los demás casos; comprueba
+cada raíz en la igualdad original. Para sistemas escribe dos ecuaciones separadas por `;` o por un salto de línea, por ejemplo
+`2x + y = 5; x − y = 1`. Se explican las operaciones de eliminación, se detectan soluciones únicas, infinitas o inexistentes y
+se comprueba la solución única en ambas ecuaciones. La interfaz incluye ejemplos de los dos tipos.
 
 ## Álgebra (Etapa 3, tipo Baldor)
 

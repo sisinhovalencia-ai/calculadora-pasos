@@ -47,6 +47,9 @@ _MOTIVO = {
                     "una sola vez; así se puede dividir entre todo su coeficiente de una vez.",
     "despejar": "La letra está multiplicada por una expresión; la operación contraria es dividir entre esa "
                 "expresión, y se hace en los dos lados.",
+    "aislar_potencia": "Primero dejamos sola la potencia de la letra; así podemos aplicar la operación inversa.",
+    "extraer_raiz": "La operación inversa de elevar a una potencia par es sacar la raíz correspondiente. Una potencia "
+                    "par puede venir de una base positiva o negativa, por eso aparecen las dos ramas.",
     "simplificar_final": "Si el numerador y el denominador tienen algo en común, se puede simplificar; así la "
                          "respuesta queda lo más sencilla posible.",
     "intercambiar": "Leer una igualdad al revés no la cambia: si X = t, entonces t = X.",
@@ -218,6 +221,15 @@ def _fmt(e) -> tuple[str, str]:
         n, d = sp.fraction(e)
         if d != 1:
             return _fmt(_Fr(n, d))
+        base, exp = e.as_base_exp()
+        if exp.is_Rational and int(exp.q) > 1 and int(exp.p) == 1:
+            indice = int(exp.q)
+            bt, bl = _fmt(base)
+            if base.is_Add or base.is_Mul:
+                bt, bl = f"({bt})", f"\\left({bl}\\right)"
+            signo = "√" if indice == 2 else ("∛" if indice == 3 else f"raiz{indice}")
+            tex = f"\\sqrt{{{bl}}}" if indice == 2 else f"\\sqrt[{indice}]{{{bl}}}"
+            return f"{signo}({bt})", tex
         return _fmt_factor(e)
     raise ErrorMotor(f"No sé dibujar {e!r}")  # pragma: no cover
 
@@ -226,6 +238,8 @@ def _fmt_factor(f) -> tuple[str, str]:
     sp = _sp()
     if f.is_Pow:
         base, exp = f.as_base_exp()
+        if exp.is_Rational and int(exp.q) > 1:
+            return _fmt(f)
         bt, bl = _fmt(base)
         if base.is_Add or base.is_Mul:
             bt, bl = f"({bt})", f"({bl})"
@@ -327,9 +341,13 @@ def resolver_formula(texto: str) -> Solucion:
     if T_nombre not in letras:
         raise ErrorDeEntrada(f"La letra {T_nombre} no aparece en la fórmula (las letras son: "
                              f"{', '.join(sorted(letras)) or 'ninguna'}).")
-    if len(letras) == 1:                  # solo una letra: es una ecuación de las de siempre
-        from .ecuaciones import resolver_ecuacion
-        return resolver_ecuacion(resto)
+    if len(letras) == 1:                  # las lineales van al solucionador de ecuaciones habitual
+        unica: dict = {}
+        simbolo = unica.setdefault(T_nombre, sp.Symbol(T_nombre))
+        polinomio = sp.Poly(sp.expand(_a_sympy(nI, unica) - _a_sympy(nD, unica)), simbolo)
+        if polinomio.degree() <= 1:
+            from .ecuaciones import resolver_ecuacion
+            return resolver_ecuacion(resto)
 
     _ORDEN.clear()
     for ch in resto:
@@ -408,8 +426,62 @@ def resolver_formula(texto: str) -> Solucion:
     # 4. La letra debe ser de primer grado
     P = sp.Poly(sp.expand(L - R), T)
     if P.degree() > 1:
-        raise ErrorMatematico(f"La letra {T_nombre} aparece elevada a una potencia: por ahora solo despejo letras "
-                              f"de primer grado.")
+        # Potencia pura: a·T^n + c = 0. Es el patrón de fórmulas como A = πr²
+        # y Ec = ½mv², y permite explicar el despeje sin esconder pasos en solve().
+        terminos = [(mon, c) for mon, c in P.terms() if c != 0]
+        grado = P.degree()
+        if (grado == 2 and len(terminos) == 2
+                and any(mon == (grado,) for mon, _ in terminos)
+                and any(mon == (0,) for mon, _ in terminos)):
+            coef = P.coeff_monomial(T ** grado)
+            constante = P.coeff_monomial(1)
+            derecha = sp.cancel(-constante / coef)
+            raiz = sp.sqrt(derecha)
+            # Para grado par, la igualdad tiene dos ramas reales (si el radicando no es negativo).
+            dos = grado % 2 == 0
+            positivo = sp.simplify(raiz)
+            soluciones = [positivo, -positivo] if dos else [positivo]
+            if sp.ask(sp.Q.negative(derecha)):
+                raise ErrorMatematico("No hay soluciones reales: el valor bajo la raíz es negativo.")
+
+            exp_pot = _fmt(T ** grado)
+            rhs = _fmt(derecha)
+            agregar("aislar_potencia", f"Reunimos los términos y aislamos la potencia: {T_nombre}^{grado} = "
+                                      f"{rhs[0]}.", operacion=f"{T_nombre}^{grado}",
+                    ec=(f"{T_nombre}^{grado} = {rhs[0]}", f"{T_nombre}^{{{grado}}} = {rhs[1]}"))
+            rt, rtl = f"√({rhs[0]})", f"\\sqrt{{{rhs[1]}}}"
+            signo = "±" if dos else ""
+            signo_tex = "\\pm " if dos else ""
+            result_txt, result_tex = f"{T_nombre} = {signo}{rt}", f"{T_nombre} = {signo_tex}{rtl}"
+            condicion = " Si se buscan soluciones reales, el valor bajo la raíz debe ser mayor o igual que 0." if dos else ""
+            agregar("extraer_raiz", f"Aplicamos la raíz de índice {grado} a ambos lados.{condicion} "
+                                    f"Como el exponente es par, consideramos las dos posibilidades: positiva y negativa."
+                                    if dos else f"Aplicamos la raíz de índice {grado} a ambos lados.",
+                    operacion=f"raíz {grado}", ec=(result_txt, result_tex))
+            # Verificación independiente en la fórmula de partida para todas las ramas.
+            for raiz_sol in soluciones:
+                if sp.simplify((L0 - R0).subs(T, raiz_sol)) != 0:
+                    raise ErrorMotor("La comprobación de la potencia falló.")
+            oficial = sp.solve(L0 - R0, T)
+            if len(oficial) != len(soluciones) or any(not any(sp.simplify(x - y) == 0 for y in oficial)
+                                                       for x in soluciones):
+                raise ErrorMotor(f"La comprobación falló: SymPy da {oficial} y aquí salió {soluciones}")
+            st, sl = result_txt.split(" = ", 1)[1], result_tex.split(" = ", 1)[1]
+            ec_orig = f"{a_texto(_a_cocientes(nI))} = {a_texto(_a_cocientes(nD))}"
+            agregar("comprobar", f"Comprobamos sustituyendo las soluciones en la fórmula original: ambas ramas "
+                                  "hacen iguales los dos lados. El despeje es correcto.", operacion=st,
+                    ec=(result_txt, result_tex))
+            supuestos.append(coef)
+            coef_txt = _fmt(-coef if coef.could_extract_minus_sign() else coef)[0]
+            nota = (f"Se supone que {coef_txt} no vale 0. "
+                    if coef.free_symbols else "") + ("Se muestran las dos soluciones reales; para que existan, "
+                    "el radicando debe ser mayor o igual que 0." if dos else "")
+            inicial_t = f"{a_texto(_a_cocientes(nI))} = {a_texto(_a_cocientes(nD))}"
+            return Solucion(tipo="formula", entrada=texto,
+                            expresion_inicial=f"despejar {T_nombre} en {inicial_t}",
+                            latex_inicial=f"{a_latex(_a_cocientes(nI))} = {a_latex(_a_cocientes(nD))}",
+                            pasos=pasos, resultado=result_txt, resultado_latex=result_tex, nota=nota)
+        raise ErrorMatematico(f"La letra {T_nombre} aparece en una potencia que no puedo aislar paso a paso todavía.")
     if P.degree() < 1 or sp.cancel(P.coeff_monomial(T)) == 0:
         raise ErrorMatematico(f"La letra {T_nombre} se cancela: no se puede despejar.")
 

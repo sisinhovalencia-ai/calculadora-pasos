@@ -47,9 +47,11 @@ EJEMPLOS = ["2 + 3 × (4 − 1)^2", "1/2 + 1/3", "4/6 + 1/3", "3 1/2 + 2 3/4",
 
 EJEMPLOS_ECUACIONES = ["2x + 3 = 11", "3x − 5 = 2x + 7", "2(x + 3) = 14", "x/2 + 1 = 5",
                       "x² − 5x + 6 = 0", "x² − 2 = 0"]
+EJEMPLOS_SISTEMAS = ["2x + y = 5; x − y = 1", "x + y = 2; 2x + 2y = 4"]
 EJEMPLOS_DESIGUALDADES = ["2x + 3 < 11", "−2x + 1 ≥ 7", "3(x − 1) > 2x + 4", "x/2 − 1 ≤ 3"]
 EJEMPLOS_FORMULAS = ["despejar t en v = d/t", "despejar h en A = b·h/2", "despejar w en P = 2l + 2w",
-                     "despejar C en F = 9C/5 + 32", "despejar a en F = ma"]
+                     "despejar C en F = 9C/5 + 32", "despejar a en F = ma",
+                     "despejar r en A = πr²", "despejar v en K = m·v²/2"]
 EJEMPLOS_ALGEBRA = ["(x + 3)²", "(2x + 3)(2x − 3)", "(x + 2)(x + 5)", "(3x² + 2x) − (x² − 5x)"]
 EJEMPLOS_FACTORIZAR = ["factorizar x² − 9", "factorizar x² + 5x + 6", "factorizar 2x² + 7x + 3",
                        "factorizar ax + ay + bx + by", "factorizar x³ − 8"]
@@ -730,6 +732,7 @@ async def inicio(q: str = "") -> None:
 
                         filas_nivel.append((_fila_ejemplos("Prueba con:", EJEMPLOS, usar_ejemplo), 1))
                         filas_nivel.append((_fila_ejemplos("Ecuaciones:", EJEMPLOS_ECUACIONES, usar_ejemplo), 2))
+                        filas_nivel.append((_fila_ejemplos("Sistemas:", EJEMPLOS_SISTEMAS, usar_ejemplo), 2))
                         filas_nivel.append((_fila_ejemplos("Desigualdades:", EJEMPLOS_DESIGUALDADES, usar_ejemplo), 2))
                         filas_nivel.append((_fila_ejemplos("Fórmulas:", EJEMPLOS_FORMULAS, usar_ejemplo), 2))
                         filas_nivel.append((_fila_ejemplos("Álgebra:", EJEMPLOS_ALGEBRA, usar_ejemplo), 3))

@@ -137,6 +137,13 @@ async def test_ejemplo_cuadratico_desde_la_fila_de_ecuaciones(user: User):
     await user.should_see("x₁ = 2, x₂ = 3")
 
 
+async def test_ejemplo_de_sistema_desde_la_interfaz(user: User):
+    await user.open("/")
+    user.find("2x + y = 5; x − y = 1").click()
+    await user.should_see("x = 2, y = 1")
+    await user.should_see("ambas ecuaciones originales")
+
+
 async def test_teclas_de_raices_especiales_y_ecuaciones(user: User):
     await user.open("/")
     campo = user.find(ui.input).elements.pop()

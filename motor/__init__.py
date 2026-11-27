@@ -26,6 +26,7 @@ from .fracciones_alg import resolver_fraccion
 from .pasos import Paso, Solucion
 from .polinomios import resolver_polinomio
 from .radicales import resolver_radicales
+from .sistemas import resolver_sistema
 
 
 def resolver_ejercicio(texto: str) -> "Solucion":
@@ -37,6 +38,8 @@ def resolver_ejercicio(texto: str) -> "Solucion":
     con letras y sin nada más                     → álgebra (fracción si hay letras abajo; si no, polinomio)
     solo números                                  → aritmética (y si una raíz no es exacta, radicales)
     """
+    if texto is not None and (";" in texto or "\n" in texto or "\r" in texto):
+        return resolver_sistema(texto)
     if texto is not None and re.search(r"\bdespejar\b", texto, re.IGNORECASE):
         return resolver_formula(texto)
     if texto is not None and "=" in texto and es_cuadratica(texto):
@@ -77,5 +80,5 @@ def _algebra(comando, resto: str, entrada: str) -> "Solucion":
 
 __all__ = ["resolver", "resolver_columnas", "resolver_ecuacion", "resolver_formula", "resolver_factorizacion",
            "resolver_fraccion", "resolver_polinomio", "resolver_radicales", "resolver_cuadratica",
-           "es_cuadratica", "resolver_ejercicio", "Paso", "Solucion",
+           "es_cuadratica", "resolver_sistema", "resolver_ejercicio", "Paso", "Solucion",
            "ErrorMotor", "ErrorDeEntrada", "ErrorMatematico"]

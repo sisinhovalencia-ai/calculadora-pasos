@@ -157,8 +157,7 @@ def test_errores_de_entrada(texto):
 
 
 @pytest.mark.parametrize("texto, pista", [
-    ("despejar x en x² = a", "potencia"),
-    ("despejar x en x·x = a", "potencia"),
+    ("despejar x en x² + x = a", "potencia"),
     ("despejar x en x + a = x + b", "se cancela"),
     ("despejar t en v = d/t + t", "potencia"),
     ("despejar x en y = x/0", "dividir entre cero"),
@@ -167,6 +166,23 @@ def test_errores_matematicos(texto, pista):
     with pytest.raises(ErrorMatematico) as e:
         resolver_ejercicio(texto)
     assert pista in str(e.value)
+
+
+@pytest.mark.parametrize("texto, resultado", [
+    ("despejar r en A = πr²", "r = ±√(A/π)"),
+    ("despejar v en K = m·v²/2", "v = ±√(2K/m)"),
+    ("despejar x en y = 3x²", "x = ±√(y/3)"),
+])
+def test_potencias_puras_se_despejan_con_ambas_ramas(texto, resultado):
+    sol = resolver_formula(texto)
+    assert sol.resultado == resultado
+    assert [p.regla for p in sol.pasos][-3:] == ["aislar_potencia", "extraer_raiz", "comprobar"]
+    assert "dos soluciones" in sol.nota or "dos soluciones" in sol.pasos[-2].explicacion
+
+
+def test_potencia_sin_soluciones_reales_se_informa():
+    with pytest.raises(ErrorMatematico, match="No hay soluciones reales"):
+        resolver_formula("despejar x en x² = −4")
 
 
 # ---------------------------------------------------------------------------

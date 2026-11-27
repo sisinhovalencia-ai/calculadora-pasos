@@ -5,6 +5,7 @@ La prueba fuerte: para CADA fórmula y CADA letra, con números al azar, la resp
 """
 
 import random
+import re
 from fractions import Fraction
 
 import pytest
@@ -63,6 +64,8 @@ def test_todas_las_letras_de_todas_las_formulas_se_pueden_despejar():
     ("ohm", "R", {"V": "9", "I": "1/2"}, "18"),
     ("peso", "P", {"m": "70", "g": "9,8"}, "686"),
     ("newton", "a", {"F": "30", "m": "6"}, "5"),
+    ("area_circulo", "r", {"A": "25"}, "±"),
+    ("energia_cinetica", "v", {"K": "100", "m": "2"}, "±10"),
     ("fahrenheit", "C", {"F": "98.6"}, "37"),
     ("fahrenheit", "F", {"C": "100"}, "212"),
     ("monto", "C", {"M": "1050", "r": "0.05", "t": "1"}, "1000"),
@@ -72,7 +75,15 @@ def test_todas_las_letras_de_todas_las_formulas_se_pueden_despejar():
 ])
 def test_resultados_conocidos(id_formula, objetivo, valores, esperado):
     sol = calcular(id_formula, objetivo, valores)
-    assert _a_fraccion(sol.resultado.split("=")[1].strip()) == _a_fraccion(esperado), sol.resultado
+    respuesta = sol.resultado.split("=", 1)[1].strip()
+    if esperado.startswith("±"):
+        assert respuesta.startswith("±")
+        if esperado == "±":
+            assert sol.resultado_decimal is not None
+        else:
+            assert _a_fraccion(respuesta.removeprefix("±")) == _a_fraccion(esperado.removeprefix("±")), sol.resultado
+    else:
+        assert _a_fraccion(respuesta) == _a_fraccion(esperado), sol.resultado
     assert sol.tipo == "formula_numerica" and formula(id_formula).variable(objetivo).unidad in sol.nota
 
 
@@ -91,6 +102,14 @@ def test_pi_se_usa_aproximado_y_se_avisa():
     sol = calcular("circunferencia", "C", {"r": "5"})
     assert "π ≈ 3,1416" in sol.nota and "3,1416" in [p for p in sol.pasos if p.regla == "sustituir"][0].explicacion
     assert abs(float(sol.resultado.split("=")[1])) == pytest.approx(2 * 3.1416 * 5)
+
+
+def test_despejes_no_lineales_calculan_radicales_y_muestran_unidades():
+    area = calcular("area_circulo", "r", {"A": "25"})
+    energia = calcular("energia_cinetica", "v", {"K": "100", "m": "2"})
+    assert area.resultado.startswith("r = ±") and area.resultado_decimal
+    assert "unidades" in area.nota and "≈" in area.nota
+    assert energia.resultado == "v = ±10" and "m/s" in energia.nota
 
 
 def test_valores_con_fraccion_decimal_con_coma_y_negativos():
@@ -137,11 +156,20 @@ def test_cada_respuesta_cumple_la_formula_original():
                     sol = calcular(f.id, v.letra, valores)
                 except ErrorMatematico:
                     continue                                   # esos números hacen la fórmula imposible (÷ 0)
-                respuesta = sp.Rational(_a_fraccion(sol.resultado.split("=", 1)[1].strip()))
+                texto_respuesta = sol.resultado.split("=", 1)[1].strip().removeprefix("±").replace("−", "-")
+                if sol.resultado_decimal and not re.fullmatch(r"-?\d+(?:/\d+|\.\d+)?", texto_respuesta):
+                    respuesta = sp.Float(sol.resultado_decimal.replace("−", "-"))
+                elif re.fullmatch(r"-?\d+(?:/\d+|\.\d+)?", texto_respuesta):
+                    respuesta = sp.Rational(_a_fraccion(texto_respuesta))
+                else:
+                    # El motor conserva el radical exacto en la respuesta; usa su aproximación para
+                    # comprobar que satisface la fórmula con los datos numéricos elegidos.
+                    assert sol.resultado_decimal, (f.id, v.letra, sol.resultado)
+                    respuesta = sp.Float(sol.resultado_decimal)
                 sustitucion = {simbolos[k]: sp.Rational(Fraction(x)) for k, x in valores.items()}
                 sustitucion[simbolos[v.letra]] = respuesta
                 sustitucion[sp.pi] = pi
-                assert ecuacion.subs(sustitucion) == 0, f"{f.id}: {v.letra} = {respuesta} con {valores} NO cumple {f.expresion}"
+                assert abs(float(ecuacion.subs(sustitucion))) < 1e-5, f"{f.id}: {v.letra} = {respuesta} con {valores} NO cumple {f.expresion}"
                 comprobadas += 1
                 assert all(p.explicacion and p.motivo for p in sol.pasos)
     assert comprobadas > 400

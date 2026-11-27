@@ -22,7 +22,7 @@ español primero, enfoque tipo Baldor, y explicar **el porqué** de cada paso.
 - [x] Solucionador con pasos ("restamos 3 en ambos lados…"), casos sin solución e infinitas soluciones, y comprobación
 - [ ] Ecuaciones con la incógnita en el denominador (`3/x = 2`)
 - [x] Ecuaciones literales: despejar una letra de una fórmula (`despejar t en v = d/t`), con SymPy, supuestos y comprobación
-- [ ] Despejar letras con potencias o raíces (`despejar r en A = πr²` → r = √(A/π))
+- [x] Despejar potencias cuadradas aisladas (`despejar r en A = πr²`, `K = mv²/2`), mostrar ambas ramas reales, comprobarlas y calcular con radicales
 - [ ] Letras con subíndices (`x0`, `v1`) y letras griegas
 - [x] Desigualdades lineales (`2x + 3 < 11`, `−2x + 1 ≥ 7`): invierten el símbolo al dividir entre un negativo y al leer al revés; intervalo y comprobación
 - [x] Método mejorado (idea tomada de comparar con ChatGPT): x donde queda positiva, operación escrita en los dos lados, distributiva aparte
@@ -46,7 +46,7 @@ español primero, enfoque tipo Baldor, y explicar **el porqué** de cada paso.
 - [x] Selector de nivel (Todo / Básica / Ecuaciones / Álgebra) que solo cambia teclas y ejemplos visibles
 - [x] Formulario con 28 fórmulas en 6 temas (movimiento, fuerza y energía, electricidad, materia y calor, geometría, ingeniería industrial)
 - [x] Despejar cualquier letra con pasos y **calcular con números** (sustituir + aritmética), con unidades
-- [ ] Fórmulas con potencias o raíces (Ec = ½mv², A = πr², d = ½at²): necesitan la Etapa 4
+- [x] Fórmulas con potencias cuadradas aisladas (energía cinética y área del círculo), con cálculo numérico y aproximación cuando hace falta
 - [ ] Subíndices en las letras (v₀, m₁) para fórmulas de física como se escriben en el libro
 - [ ] Más fórmulas: cinemática avanzada, termodinámica, estadística básica, economía de la ingeniería (interés compuesto)
 - [ ] Búsqueda de fórmulas por nombre y «favoritas» del estudiante
@@ -60,7 +60,16 @@ español primero, enfoque tipo Baldor, y explicar **el porqué** de cada paso.
 - [ ] Probar en un celular real, en Safari y en Firefox
 - [ ] Dominio propio (opcional) y plan de pago si la usan muchos estudiantes (el gratis se «duerme» a los 15 min)
 
-### Etapa 4 — Ecuaciones cuadráticas y sistemas
+### Etapa 4 — Ecuaciones cuadráticas, sistemas y fórmulas no lineales
+- [x] Resolver ecuaciones de segundo grado paso a paso; usar factorización racional cuando conviene y fórmula general en los demás casos
+- [x] Explicar el discriminante, clasificar raíces reales y comprobar cada raíz en la ecuación original
+- [x] Resolver sistemas lineales 2×2 con eliminación; aceptar `;` o salto de línea y detectar solución única, infinitas o ninguna
+- [x] Comprobar la solución única de un sistema en ambas ecuaciones
+- [x] Despejar y calcular las fórmulas cuadráticas `A = πr²` y `K = mv²/2`, con dos ramas algebraicas
+- [x] Integrar ejemplos cuadráticos y de sistemas en el selector; validar contra SymPy
+- [x] Actualizar README y preparar versión consolidada
+- [ ] Publicar los cambios en GitHub y Render
+- [ ] Revisar en un teléfono físico y en Safari/Firefox
 ### Etapa 5 — Derivadas e integrales
 ### Más adelante
 - [ ] Reconocimiento por foto (pieza aparte y difícil)

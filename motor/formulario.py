@@ -9,9 +9,8 @@ Cada fórmula dice qué significa cada letra y en qué unidad va. `despejar` usa
 sustituye los números que escribe el estudiante y los resuelve con el motor de aritmética: es decir, todos los pasos que se
 ven ya están probados en sus propios módulos.
 
-Todas las fórmulas son de PRIMER GRADO en cada una de sus letras (así se pueden despejar todas). Las que llevan potencias
-o raíces (energía cinética, área del círculo...) llegarán con la Etapa 4. Una prueba comprueba que cada letra de cada fórmula se
-pueda despejar y que el cálculo numérico dé lo mismo que SymPy.
+El motor admite fórmulas lineales y potencias aisladas (por ejemplo, energía cinética y área del círculo). Una prueba comprueba
+que cada letra de cada fórmula se pueda despejar y que el cálculo numérico dé lo mismo que SymPy.
 """
 
 import re
@@ -92,6 +91,9 @@ TEMAS: tuple[Tema, ...] = (
                 (_v("E", "energía potencial", "J"), _v("m", "masa", "kg"), _v("g", "gravedad", "m/s²"),
                  _v("h", "altura", "m")),
                 "En la Tierra, g ≈ 9,8 m/s²."),
+        Formula("energia_cinetica", "Energía cinética", "K = m·v²/2",
+                (_v("K", "energía cinética", "J"), _v("m", "masa", "kg"), _v("v", "rapidez", "m/s")),
+                "Al despejar v aparecen las dos raíces algebraicas; en física, la rapidez se toma no negativa."),
         Formula("presion", "Presión", "p = F/A",
                 (_v("p", "presión", "Pa"), _v("F", "fuerza", "N"), _v("A", "área", "m²"))),
     )),
@@ -127,6 +129,9 @@ TEMAS: tuple[Tema, ...] = (
         Formula("circunferencia", "Longitud de la circunferencia", "C = 2πr",
                 (_v("C", "longitud", "unidades"), _v("r", "radio", "unidades")),
                 "Se usa π ≈ 3,1416."),
+        Formula("area_circulo", "Área del círculo", "A = πr²",
+                (_v("A", "área", "unidades²"), _v("r", "radio", "unidades")),
+                "Al despejar r aparecen las dos raíces algebraicas; por definición, el radio se toma no negativo."),
     )),
     Tema("industrial", "Ingeniería industrial y finanzas", "🏭", (
         Formula("interes_simple", "Interés simple", "I = C·r·t",
@@ -219,8 +224,14 @@ def calcular(id_formula: str, objetivo: str, valores: dict[str, str]) -> Solucio
 
     despeje = resolver_formula(f"despejar {objetivo} en {f.expresion}")
     derecha = despeje.resultado.split("=", 1)[1].strip()
-    sustituida, uso_pi = _sustituir(derecha, limpios)
-    aritmetica = resolver(sustituida)
+    dos_ramas = derecha.startswith("±")
+    expresion_positiva = derecha[1:] if dos_ramas else derecha
+    sustituida, uso_pi = _sustituir(expresion_positiva, limpios)
+    if any(raiz in sustituida for raiz in ("√", "∛", "∜")):
+        from .radicales import resolver_radicales
+        aritmetica = resolver_radicales(sustituida)
+    else:
+        aritmetica = resolver(sustituida)
 
     pasos = [p for p in despeje.pasos if p.regla != "comprobar"]          # la comprobación simbólica sobra aquí
     datos = ", ".join(f"{v.letra} = {limpios[v.letra]} {v.unidad}" for v in otras)
@@ -231,14 +242,15 @@ def calcular(id_formula: str, objetivo: str, valores: dict[str, str]) -> Solucio
         motivo="Con la letra despejada, solo hay que reemplazar cada letra por su número y hacer las operaciones en el "
                "orden de siempre.",
         operacion=datos, resultado_parcial="",
-        expresion=f"{objetivo} = {aritmetica.expresion_inicial}",
-        latex=f"{objetivo} = {aritmetica.latex_inicial}"))
+        expresion=f"{objetivo} = {'±' if dos_ramas else ''}{aritmetica.expresion_inicial}",
+        latex=f"{objetivo} = {'\\pm ' if dos_ramas else ''}{aritmetica.latex_inicial}"))
     for p in aritmetica.pasos:                                  # «25/2» se lee mejor como «v = 25/2»
-        pasos.append(replace(p, numero=len(pasos) + 1, expresion=f"{objetivo} = {p.expresion}", latex=f"{objetivo} = {p.latex}",
+        pasos.append(replace(p, numero=len(pasos) + 1, expresion=f"{objetivo} = {'±' if dos_ramas else ''}{p.expresion}",
+                             latex=f"{objetivo} = {'\\pm ' if dos_ramas else ''}{p.latex}",
                              pizarra=None))
 
     unidad = f.variable(objetivo).unidad
-    respuesta = f"{objetivo} = {aritmetica.resultado}"
+    respuesta = f"{objetivo} = {'±' if dos_ramas else ''}{aritmetica.resultado}"
     decimal = ""
     if aritmetica.resultado_decimal:
         decimal = f" {'=' if aritmetica.decimal_exacto else '≈'} {aritmetica.resultado_decimal} {unidad}"
@@ -247,7 +259,7 @@ def calcular(id_formula: str, objetivo: str, valores: dict[str, str]) -> Solucio
     return Solucion(
         tipo="formula_numerica", entrada=f"{f.expresion} | {objetivo} | {limpios}",
         expresion_inicial=f"{f.expresion}   →   {objetivo} = ?", latex_inicial=despeje.latex_inicial,
-        pasos=pasos, resultado=respuesta, resultado_latex=f"{objetivo} = {aritmetica.resultado_latex}",
+        pasos=pasos, resultado=respuesta, resultado_latex=f"{objetivo} = {'\\pm ' if dos_ramas else ''}{aritmetica.resultado_latex}",
         resultado_decimal=aritmetica.resultado_decimal, decimal_exacto=aritmetica.decimal_exacto, nota=nota)
 
 
