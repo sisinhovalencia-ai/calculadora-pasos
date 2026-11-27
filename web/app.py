@@ -45,7 +45,8 @@ MAX_CARACTERES = 200   # un ejercicio escolar nunca es más largo; evita entrada
 EJEMPLOS = ["2 + 3 × (4 − 1)^2", "1/2 + 1/3", "4/6 + 1/3", "3 1/2 + 2 3/4",
             "20% de 150", "√(16 + 9)", "−3^2", "0.1 + 0.2"]
 
-EJEMPLOS_ECUACIONES = ["2x + 3 = 11", "3x − 5 = 2x + 7", "2(x + 3) = 14", "x/2 + 1 = 5"]
+EJEMPLOS_ECUACIONES = ["2x + 3 = 11", "3x − 5 = 2x + 7", "2(x + 3) = 14", "x/2 + 1 = 5",
+                      "x² − 5x + 6 = 0", "x² − 2 = 0"]
 EJEMPLOS_DESIGUALDADES = ["2x + 3 < 11", "−2x + 1 ≥ 7", "3(x − 1) > 2x + 4", "x/2 − 1 ≤ 3"]
 EJEMPLOS_FORMULAS = ["despejar t en v = d/t", "despejar h en A = b·h/2", "despejar w en P = 2l + 2w",
                      "despejar C en F = 9C/5 + 32", "despejar a en F = ma"]
@@ -472,7 +473,7 @@ async def inicio(q: str = "") -> None:
         except ErrorDeEntrada as e:
             est.sol = None
             est.tipo_error = "entrada"
-            est.error = str(e)
+            est.error = _mensaje_columnas(texto, e) if est.columnas else str(e)
         except ErrorMotor as e:
             est.sol = None
             est.tipo_error = "motor"
@@ -545,9 +546,10 @@ async def inicio(q: str = "") -> None:
         if est.sol is not None or est.error is not None:
             est.sol = est.error = est.tipo_error = None
             est.visibles = 0
+            est.resolviendo = False
             pintar()
-        motor_live.refresh()
-        guia_live.refresh()
+            motor_live.refresh()
+            guia_live.refresh()
 
     def enfocar_planteamiento() -> None:
         _js("const i = document.querySelector('.entrada input'); if (i) { i.focus(); i.scrollIntoView({behavior: 'smooth', block: 'center'}); }")
@@ -661,7 +663,7 @@ async def inicio(q: str = "") -> None:
                      .on("keydown.enter", avisar_calculo).on("keydown.space", avisar_calculo))
                 _html('<h3>Estructura de una expresión</h3>')
                 with ui.element("div").classes("arbol arbol-clickable cursor-pointer").props(
-                        'role="button" tabindex="0" aria-label="Resolver el ejemplo (2 + 3) por 4"') \
+                        'role="button" tabindex="0" aria-label="Ejemplo interactivo de la expresión (2 + 3) por 4"') \
                         .on("click", lambda: usar_ejemplo("(2 + 3) * 4")):
                     _html(
                         '<span class="arbol-prompt">Pulsa para probar</span>'
@@ -671,7 +673,7 @@ async def inicio(q: str = "") -> None:
                         '<rect class="arbol-caja" x="18" y="43" width="74" height="21" rx="5"/><text class="arbol-expresion" x="55" y="57" text-anchor="middle">(2 + 3)</text>'
                         '<rect class="arbol-caja" x="128" y="43" width="74" height="21" rx="5"/><text class="arbol-expresion" x="165" y="57" text-anchor="middle">4</text>'
                         '<text class="arbol-hoja" x="40" y="91" text-anchor="middle">2</text><text class="arbol-hoja" x="70" y="91" text-anchor="middle">3</text><text class="arbol-hoja" x="165" y="91" text-anchor="middle">4</text></svg>'
-                        '<span class="arbol-cta">Resolver (2 + 3) × 4</span>'
+                        '<span class="arbol-cta">Probar: (2 + 3) × 4</span>'
                     ).classes("arbol-content")
 
             with ui.element("section").classes("panel-central"):

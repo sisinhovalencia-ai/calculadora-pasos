@@ -16,6 +16,7 @@ from dataclasses import replace
 from .algebra import leer, separar_comando, tiene_comando
 from .aritmetica import resolver
 from .columnas import resolver_columnas
+from .cuadraticas import es_cuadratica, resolver_cuadratica
 from .ecuaciones import resolver_ecuacion
 from .errores import ErrorDeEntrada, ErrorMatematico, ErrorMotor
 from .expr import tiene_letras
@@ -38,6 +39,8 @@ def resolver_ejercicio(texto: str) -> "Solucion":
     """
     if texto is not None and re.search(r"\bdespejar\b", texto, re.IGNORECASE):
         return resolver_formula(texto)
+    if texto is not None and "=" in texto and es_cuadratica(texto):
+        return resolver_cuadratica(texto)
     if texto is not None and any(c in texto for c in "=<>≤≥"):
         return resolver_ecuacion(texto)
     if texto is not None and tiene_comando(texto):
@@ -73,5 +76,6 @@ def _algebra(comando, resto: str, entrada: str) -> "Solucion":
 
 
 __all__ = ["resolver", "resolver_columnas", "resolver_ecuacion", "resolver_formula", "resolver_factorizacion",
-           "resolver_fraccion", "resolver_polinomio", "resolver_radicales", "resolver_ejercicio", "Paso", "Solucion",
+           "resolver_fraccion", "resolver_polinomio", "resolver_radicales", "resolver_cuadratica",
+           "es_cuadratica", "resolver_ejercicio", "Paso", "Solucion",
            "ErrorMotor", "ErrorDeEntrada", "ErrorMatematico"]

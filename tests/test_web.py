@@ -131,6 +131,12 @@ async def test_ejemplo_de_ecuacion(user: User):
     await user.should_see("restamos 2x en ambos lados")
 
 
+async def test_ejemplo_cuadratico_desde_la_fila_de_ecuaciones(user: User):
+    await user.open("/")
+    user.find("x² − 5x + 6 = 0").click()
+    await user.should_see("x₁ = 2, x₂ = 3")
+
+
 async def test_teclas_de_raices_especiales_y_ecuaciones(user: User):
     await user.open("/")
     campo = user.find(ui.input).elements.pop()
@@ -305,10 +311,11 @@ async def test_algebra_con_modo_columnas_avisa(user: User):
     await user.should_see("Apaga «En columnas (a mano)»")
 
 
-async def test_error_de_ecuacion_no_lineal(user: User):
+async def test_ecuacion_cuadratica_desde_pantalla(user: User):
     await user.open("/")
     user.find(ui.input).type("x² = 4").trigger("keydown.enter")
-    await user.should_see("no es lineal")
+    await user.should_see("Resultado")
+    await user.should_see("x₁ = −2, x₂ = 2")
 
 
 def test_pizarra_marca_y_escapa():
