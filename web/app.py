@@ -48,7 +48,9 @@ EJEMPLOS = ["2 + 3 × (4 − 1)^2", "1/2 + 1/3", "4/6 + 1/3", "3 1/2 + 2 3/4",
 
 EJEMPLOS_ECUACIONES = ["2x + 3 = 11", "3x − 5 = 2x + 7", "2(x + 3) = 14", "x/2 + 1 = 5",
                       "x² − 5x + 6 = 0", "x² − 2 = 0"]
-EJEMPLOS_SISTEMAS = ["2x + y = 5; x − y = 1", "x + y = 2; 2x + 2y = 4"]
+EJEMPLOS_SISTEMAS = ["2x + y = 5; x − y = 1", "x + y = 2; 2x + 2y = 4",
+                     "x + y = 2; x − y = 0", "x + y = 2; x + y = 5",
+                     "2x − y = 1; x + y = 5"]
 EJEMPLOS_DESIGUALDADES = ["2x + 3 < 11", "−2x + 1 ≥ 7", "3(x − 1) > 2x + 4", "x/2 − 1 ≤ 3"]
 EJEMPLOS_FORMULAS = ["despejar t en v = d/t", "despejar h en A = b·h/2", "despejar w en P = 2l + 2w",
                      "despejar C en F = 9C/5 + 32", "despejar a en F = ma",
@@ -210,12 +212,24 @@ def _final_html(sol: Solucion) -> str:
     )
 
 
-def _fila_ejemplos(etiqueta: str, ejemplos: list[str], al_pulsar):
+def _fila_ejemplos(etiqueta: str, ejemplos: list[str], al_pulsar, *, rotaciones=None,
+                   al_entrar=None, al_salir=None):
     """Una fila de botones de ejemplo con su rótulo («Prueba con:», «Ecuaciones:»...). Devuelve la fila."""
     with ui.element("div").classes("ejemplos") as fila:
         ui.label(etiqueta)
         for ej in ejemplos:
-            ui.button(ej, on_click=lambda t=ej: al_pulsar(t), color=None).classes("ejemplo").props("flat no-caps")
+            if rotaciones is None:
+                boton = ui.button(ej, on_click=lambda t=ej: al_pulsar(t), color=None)
+            else:
+                estado = {"texto": ej, "boton": None}
+                boton = ui.button(ej, on_click=lambda e=estado: al_pulsar(e["texto"]), color=None)
+                estado["boton"] = boton
+                rotaciones.append((estado, ejemplos))
+                if al_entrar:
+                    boton.on("mouseenter", al_entrar)
+                if al_salir:
+                    boton.on("mouseleave", al_salir)
+            boton.classes("ejemplo").props("flat no-caps")
     return fila
 
 
@@ -332,6 +346,7 @@ async def inicio(q: str = "") -> None:
     est = Estado()
     vista: dict = {"lista": None, "siguiente": None}   # elementos que `siguiente()` necesita tocar
     sugerencia = {"texto": "x + 3 = 8", "timer": None}
+    rotaciones_ejemplos: list = []
 
     def pausar_sugerencias() -> None:
         if sugerencia["timer"] is not None:
@@ -348,7 +363,17 @@ async def inicio(q: str = "") -> None:
             return
         opciones = [ejemplo for ejemplo in SUGERENCIAS if ejemplo != sugerencia["texto"]]
         sugerencia["texto"] = random.choice(opciones)
+        for estado, ejemplos in rotaciones_ejemplos:
+            opciones_fila = [ejemplo for ejemplo in ejemplos if ejemplo != estado["texto"]]
+            if opciones_fila:
+                estado["texto"] = random.choice(opciones_fila)
+                estado["boton"].text = estado["texto"]
         guia_live.refresh()
+
+    def fila_ejemplos(etiqueta: str, ejemplos: list[str], al_pulsar):
+        return _fila_ejemplos(etiqueta, ejemplos, al_pulsar,
+                              rotaciones=rotaciones_ejemplos,
+                              al_entrar=pausar_sugerencias, al_salir=reanudar_sugerencias)
 
     # ----- dibujo ---------------------------------------------------------
     def mostrar_final(sol: Solucion) -> None:
@@ -763,16 +788,17 @@ async def inicio(q: str = "") -> None:
                                 b.classes("tecla tecla-ancha op").mark(f"tecla-{comando}")
                                 teclas_nivel.append((b, NIVEL_DE_TECLA[comando]))
 
-                        filas_nivel.append((_fila_ejemplos("Prueba con:", EJEMPLOS, usar_ejemplo), 1))
-                        filas_nivel.append((_fila_ejemplos("Ecuaciones:", EJEMPLOS_ECUACIONES, usar_ejemplo), 2))
-                        filas_nivel.append((_fila_ejemplos("Sistemas:", EJEMPLOS_SISTEMAS, usar_ejemplo), 2))
-                        filas_nivel.append((_fila_ejemplos("Desigualdades:", EJEMPLOS_DESIGUALDADES, usar_ejemplo), 2))
-                        filas_nivel.append((_fila_ejemplos("Fórmulas:", EJEMPLOS_FORMULAS, usar_ejemplo), 2))
-                        filas_nivel.append((_fila_ejemplos("Álgebra:", EJEMPLOS_ALGEBRA, usar_ejemplo), 3))
-                        filas_nivel.append((_fila_ejemplos("Factorizar:", EJEMPLOS_FACTORIZAR, usar_ejemplo), 3))
-                        filas_nivel.append((_fila_ejemplos("Fracciones:", EJEMPLOS_FRACCIONES, usar_ejemplo), 3))
-                        filas_nivel.append((_fila_ejemplos("Raíces:", EJEMPLOS_RAICES, usar_ejemplo), 3))
-                        filas_nivel.append((_fila_ejemplos("A mano:", EJEMPLOS_COLUMNAS, lambda t: usar_ejemplo(t, columnas=True)), 1))
+                        filas_nivel.append((fila_ejemplos("Prueba con:", EJEMPLOS, usar_ejemplo), 1))
+                        filas_nivel.append((fila_ejemplos("Ecuaciones:", EJEMPLOS_ECUACIONES, usar_ejemplo), 2))
+                        filas_nivel.append((fila_ejemplos("Sistemas:", EJEMPLOS_SISTEMAS, usar_ejemplo), 2))
+                        filas_nivel.append((fila_ejemplos("Desigualdades:", EJEMPLOS_DESIGUALDADES, usar_ejemplo), 2))
+                        filas_nivel.append((fila_ejemplos("Fórmulas:", EJEMPLOS_FORMULAS, usar_ejemplo), 2))
+                        filas_nivel.append((fila_ejemplos("Álgebra:", EJEMPLOS_ALGEBRA, usar_ejemplo), 3))
+                        filas_nivel.append((fila_ejemplos("Factorizar:", EJEMPLOS_FACTORIZAR, usar_ejemplo), 3))
+                        filas_nivel.append((fila_ejemplos("Fracciones:", EJEMPLOS_FRACCIONES, usar_ejemplo), 3))
+                        filas_nivel.append((fila_ejemplos("Raíces:", EJEMPLOS_RAICES, usar_ejemplo), 3))
+                        filas_nivel.append((fila_ejemplos("A mano:", EJEMPLOS_COLUMNAS,
+                                                          lambda t: usar_ejemplo(t, columnas=True)), 1))
 
                         # aria-live: el lector de pantalla anuncia el resultado cuando aparece
                         zona = ui.element("div").classes("zona").props('aria-live="polite"')

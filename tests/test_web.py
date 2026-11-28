@@ -151,8 +151,10 @@ async def test_sugerencia_del_panel_guia_cambia_a_los_diez_segundos(user: User, 
     monkeypatch.setattr(web_app.random, "choice", lambda opciones: opciones[0])
     await user.open("/")
     await user.should_see("Prueba este ejercicio · x + 3 = 8")
+    chip_prueba = user.find(ui.button, content="2 + 3 × (4 − 1)^2").elements.pop()
     await asyncio.sleep(10.2)
     await user.should_see("Prueba este ejercicio · 2 + 3 × (4 − 1)^2")
+    assert chip_prueba.text != "2 + 3 × (4 − 1)^2"
     user.find("Prueba este ejercicio · 2 + 3 × (4 − 1)^2").click()
     await user.should_see("Resultado")
 
