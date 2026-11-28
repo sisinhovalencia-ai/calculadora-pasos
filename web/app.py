@@ -19,6 +19,7 @@ Notas para quien retome esto:
 
 import asyncio
 import logging
+import random
 from dataclasses import dataclass, field
 from html import escape
 
@@ -64,6 +65,12 @@ NIVEL_DE_TECLA = {"x": 2, "=": 2, "<": 2, ">": 2, "≤": 2, "≥": 2, "despejar"
                   "²": 3, "³": 3, "simplificar": 3, "factorizar": 3, "desarrollar": 3}
 TIEMPO_MAXIMO = 20        # segundos que se espera una solución antes de decir «tarda demasiado»
 EJEMPLOS_COLUMNAS = ["4567 + 289", "905 − 267", "123 × 45", "7845 ÷ 12"]
+SUGERENCIAS = list(dict.fromkeys([
+    "x + 3 = 8", *EJEMPLOS, *EJEMPLOS_ECUACIONES, *EJEMPLOS_SISTEMAS,
+    *EJEMPLOS_DESIGUALDADES, *EJEMPLOS_ALGEBRA, *EJEMPLOS_FACTORIZAR,
+    *EJEMPLOS_FRACCIONES, *EJEMPLOS_RAICES,
+    "despejar h en v = √(2*g*h)",
+]))
 
 # (texto, es_operador)
 TECLAS = [
@@ -324,6 +331,24 @@ async def inicio(q: str = "") -> None:
 
     est = Estado()
     vista: dict = {"lista": None, "siguiente": None}   # elementos que `siguiente()` necesita tocar
+    sugerencia = {"texto": "x + 3 = 8", "timer": None}
+
+    def pausar_sugerencias() -> None:
+        if sugerencia["timer"] is not None:
+            sugerencia["timer"].active = False
+
+    def reanudar_sugerencias() -> None:
+        if (sugerencia["timer"] is not None and not est.historial
+                and not (entrada.value or "").strip()):
+            sugerencia["timer"].active = True
+
+    def rotar_sugerencia() -> None:
+        if est.historial or (entrada.value or "").strip():
+            pausar_sugerencias()
+            return
+        opciones = [ejemplo for ejemplo in SUGERENCIAS if ejemplo != sugerencia["texto"]]
+        sugerencia["texto"] = random.choice(opciones)
+        guia_live.refresh()
 
     # ----- dibujo ---------------------------------------------------------
     def mostrar_final(sol: Solucion) -> None:
@@ -437,9 +462,13 @@ async def inicio(q: str = "") -> None:
                               on_click=lambda t=item["entrada"]: usar_ejemplo(t), color=None) \
                         .classes("historial-item").props("flat no-caps").tooltip("Volver a resolver este ejercicio")
             else:
-                ui.button("Probar este ejemplo · x + 3 = 8", on_click=lambda: usar_ejemplo("x + 3 = 8"), color=None) \
-                    .classes("historial-demo").props("flat no-caps")
-                _html('<small class="historial-ayuda">Resuelve un ejercicio y aparecerá aquí para repetirlo.</small>')
+                boton_sugerencia = ui.button(
+                    f'Prueba este ejercicio · {sugerencia["texto"]}',
+                    on_click=lambda: usar_ejemplo(sugerencia["texto"]), color=None)
+                boton_sugerencia.classes("historial-demo").props("flat no-caps")
+                boton_sugerencia.on("mouseenter", pausar_sugerencias)
+                boton_sugerencia.on("mouseleave", reanudar_sugerencias)
+                _html('<small class="historial-ayuda">Sugerencia aleatoria · cambia cada 10 segundos. Pulsa para resolverla.</small>')
 
     def bajar_al_resultado() -> None:
         """En el celular el resultado queda más abajo que la pantalla: bajamos hasta él."""
@@ -538,6 +567,7 @@ async def inicio(q: str = "") -> None:
 
     async def usar_ejemplo(texto: str, *, columnas: bool = False) -> None:
         """Pone el ejemplo en el campo, ajusta el modo (normal o columnas) y resuelve UNA sola vez."""
+        pausar_sugerencias()
         entrada.value = texto
         est.columnas = columnas
         modo_columnas.value = columnas   # `cambiar_columnas` ve que ya coincide y no vuelve a resolver
@@ -545,6 +575,8 @@ async def inicio(q: str = "") -> None:
 
     def al_editar(e) -> None:
         """Al cambiar el campo, invalida la solución anterior y vuelve a la fase Plantea."""
+        if (e.value or "").strip() or est.historial:
+            pausar_sugerencias()
         if est.sol is not None or est.error is not None:
             est.sol = est.error = est.tipo_error = None
             est.visibles = 0
@@ -692,6 +724,7 @@ async def inicio(q: str = "") -> None:
                         entrada.props(f'borderless stack-label autocomplete="off" inputmode="text" maxlength="{MAX_CARACTERES}"')
                         entrada.on("keydown.enter", resolver_ejercicio)
                         entrada.on_value_change(al_editar)
+                        entrada.on("focus", pausar_sugerencias)
 
                         with ui.element("div").classes("fila-accion"):
                             ui.button("Resolver", on_click=resolver_ejercicio, color=None).classes("boton-resolver").props("unelevated no-caps")
@@ -760,6 +793,8 @@ async def inicio(q: str = "") -> None:
                   '<div class="recurso"><span class="recurso-icono">✎</span><div><strong>Cuaderno de fórmulas</strong><small>Escribe, compara y conserva tus procedimientos.</small></div></div>'
                   '<div class="recurso"><span class="recurso-icono">⌁</span><div><strong>Física básica</strong><small>Explora fórmulas y despeja sus variables.</small></div></div>'
                   '<div class="frase-estudio">“Estudia, aprende, logra más.”</div>')
+
+    sugerencia["timer"] = ui.timer(10.0, rotar_sugerencia, immediate=False)
 
     if q:
         entrada.value = q[:MAX_CARACTERES]

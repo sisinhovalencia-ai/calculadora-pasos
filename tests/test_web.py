@@ -5,6 +5,8 @@ navegador. La apariencia (colores, tamaños) se revisa a ojo con capturas; aquí
 se comprueba que la pantalla FUNCIONA y que nunca muestra errores técnicos.
 """
 
+import asyncio
+
 import sympy  # noqa: F401  (se carga antes: su primera carga tarda ~0,5 s y el simulador no espera tanto)
 from nicegui import ui
 from nicegui.testing import User
@@ -142,6 +144,17 @@ async def test_ejemplo_de_sistema_desde_la_interfaz(user: User):
     user.find("2x + y = 5; x − y = 1").click()
     await user.should_see("x = 2, y = 1")
     await user.should_see("ambas ecuaciones originales")
+
+
+async def test_sugerencia_del_panel_guia_cambia_a_los_diez_segundos(user: User, monkeypatch):
+    from web import app as web_app
+    monkeypatch.setattr(web_app.random, "choice", lambda opciones: opciones[0])
+    await user.open("/")
+    await user.should_see("Prueba este ejercicio · x + 3 = 8")
+    await asyncio.sleep(10.2)
+    await user.should_see("Prueba este ejercicio · 2 + 3 × (4 − 1)^2")
+    user.find("Prueba este ejercicio · 2 + 3 × (4 − 1)^2").click()
+    await user.should_see("Resultado")
 
 
 async def test_teclas_de_raices_especiales_y_ecuaciones(user: User):
